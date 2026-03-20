@@ -238,6 +238,94 @@ app.delete('/api/quotes/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── PDF GENERATION ──────────────────────────────────────────
+app.post('/api/pdf', requireAuth, (req, res) => {
+  const { quote_num, client_name, client_phone, client_email, items, subtotal, tax, total, notes, status, company, address, phone, email, tax_rate, date } = req.body;
+
+  const fmt = n => `Q ${Number(n||0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const statusColor = status === 'aprobada' ? '#d1fae5' : status === 'rechazada' ? '#fee2e2' : '#fef3c7';
+  const statusText  = status === 'aprobada' ? '#065f46' : status === 'rechazada' ? '#991b1b' : '#92400e';
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>Cotización ${esc(quote_num)}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 794px; margin: auto; font-size: 13px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #e63329; padding-bottom: 18px; }
+  .quote-title { font-size: 26px; font-weight: 800; color: #e63329; }
+  .client-box { background: #f8f8f8; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  thead tr { background: #111; color: #fff; }
+  th, td { padding: 8px 10px; text-align: left; }
+  th:not(:first-child), td:not(:first-child) { text-align: right; }
+  tr:nth-child(even) td { background: #f8f8f8; }
+  td { border-bottom: 1px solid #eee; }
+  .totals { display: flex; justify-content: flex-end; margin-bottom: 20px; }
+  .totals-box { width: 220px; }
+  .t-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; color: #555; }
+  .t-total { background: #e63329; color: #fff; padding: 8px 10px; border-radius: 6px; display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; margin-top: 6px; }
+  .sigs { display: flex; justify-content: space-around; margin-top: 36px; padding-top: 24px; border-top: 1px solid #eee; }
+  .sig { width: 140px; border-top: 1.5px solid #333; padding-top: 6px; font-size: 11px; color: #555; text-align: center; }
+  .footer { text-align: center; margin-top: 20px; font-size: 10px; color: #bbb; }
+  @media print { body { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div style="font-size:17px;font-weight:700;">${esc(company)}</div>
+    <div style="font-size:11px;color:#555;margin-top:3px;">${esc(address)}</div>
+    <div style="font-size:11px;color:#555;">${esc(phone)}${email?' · '+esc(email):''}</div>
+  </div>
+  <div style="text-align:right;">
+    <div class="quote-title">COTIZACIÓN</div>
+    <div style="font-size:16px;font-weight:700;font-family:monospace;">${esc(quote_num)}</div>
+    <div style="font-size:11px;color:#555;">Fecha: ${esc(date||'')}</div>
+    <span style="display:inline-block;margin-top:4px;background:${statusColor};color:${statusText};padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;">${esc(status)}</span>
+  </div>
+</div>
+
+<div class="client-box">
+  <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">DATOS DEL CLIENTE</div>
+  <div style="font-size:14px;font-weight:700;">${esc(client_name)}</div>
+  ${client_phone?`<div style="font-size:12px;color:#555;">${esc(client_phone)}</div>`:''}
+  ${client_email?`<div style="font-size:12px;color:#555;">${esc(client_email)}</div>`:''}
+</div>
+
+<table>
+  <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Total</th></tr></thead>
+  <tbody>
+    ${(items||[]).map((i,idx)=>`<tr><td>${esc(i.desc)}</td><td style="text-align:right">${i.qty}</td><td style="text-align:right;font-family:monospace">${fmt(i.price)}</td><td style="text-align:right">${i.disc||0}%</td><td style="text-align:right;font-family:monospace;font-weight:700">${fmt(i.total)}</td></tr>`).join('')}
+  </tbody>
+</table>
+
+<div class="totals">
+  <div class="totals-box">
+    <div class="t-row"><span>Subtotal</span><span style="font-family:monospace">${fmt(subtotal)}</span></div>
+    <div class="t-row"><span>IVA (${tax_rate||12}%)</span><span style="font-family:monospace">${fmt(tax)}</span></div>
+    <div class="t-total"><span>TOTAL</span><span style="font-family:monospace">${fmt(total)}</span></div>
+  </div>
+</div>
+
+${notes?`<div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#444;"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">NOTAS</div>${esc(notes)}</div>`:''}
+
+<div class="sigs">
+  <div><div class="sig">Firma Cliente</div></div>
+  <div><div class="sig">Firma Técnico / Vendedor</div></div>
+</div>
+
+<div class="footer">Generado con QuotePro · ${new Date().toLocaleString()}</div>
+</body></html>`;
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${quote_num}.html"`);
+  res.send(html);
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });

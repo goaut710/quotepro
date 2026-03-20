@@ -442,172 +442,51 @@ async function downloadPDF() {
   const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
   const tax      = subtotal * rate;
   const total    = subtotal + tax;
-  const company  = document.getElementById('companyName').value   || 'Mi Empresa';
-  const address  = document.getElementById('companyAddress').value || '';
-  const phone    = document.getElementById('companyPhone').value   || '';
-  const email    = document.getElementById('companyEmail').value   || '';
-  const qNum     = document.getElementById('quoteNum').value       || 'COT-0001';
-  const qDate    = document.getElementById('quoteDate').value      || '';
-  const client   = document.getElementById('clientName').value     || '-';
-  const cPhone   = document.getElementById('clientPhone').value    || '';
-  const cEmail   = document.getElementById('clientEmail').value    || '';
-  const notes    = document.getElementById('quoteNotes').value     || '';
-  const status   = document.getElementById('quoteStatus').value    || 'pendiente';
 
-  // Detect mobile
-  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-  // Build PDF content inline (works on mobile WebView)
-  const pdfHTML = `
-  <div id="pdfOverlay" style="position:fixed;inset:0;background:#000;z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch;">
-    <div style="background:#fff;min-height:100%;padding:24px;max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#111;">
-
-      <!-- TOP BAR -->
-      <div id="pdf-btn-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap;">
-        <button onclick="document.getElementById('pdfOverlay').remove()" style="background:#333;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;">✕ Cerrar</button>
-        <button onclick="compartirPDF()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">⬇️ Descargar PDF</button>
-      </div>
-      <div id="pdf-content">
-
-      <!-- HEADER -->
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #e63329;padding-bottom:16px;flex-wrap:wrap;gap:10px;">
-        <div>
-          ${logoDataURL ? `<img src="${logoDataURL}" style="height:44px;object-fit:contain;margin-bottom:6px;display:block"/>` : ''}
-          <div style="font-size:16px;font-weight:700;">${esc(company)}</div>
-          <div style="font-size:11px;color:#555;">${esc(address)}</div>
-          <div style="font-size:11px;color:#555;">${esc(phone)}${email?' · '+esc(email):''}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:22px;font-weight:800;color:#e63329;">COTIZACIÓN</div>
-          <div style="font-size:16px;font-weight:700;font-family:monospace;">${qNum}</div>
-          <div style="font-size:11px;color:#555;">Fecha: ${formatDate(qDate)}</div>
-          <span style="display:inline-block;margin-top:4px;background:${status==='aprobada'?'#d1fae5':status==='rechazada'?'#fee2e2':'#fef3c7'};color:${status==='aprobada'?'#065f46':status==='rechazada'?'#991b1b':'#92400e'};padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;">${status}</span>
-        </div>
-      </div>
-
-      <!-- CLIENT -->
-      <div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
-        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">DATOS DEL CLIENTE</div>
-        <div style="font-size:14px;font-weight:700;">${esc(client)}</div>
-        ${cPhone?`<div style="font-size:12px;color:#555;">${esc(cPhone)}</div>`:''}
-        ${cEmail?`<div style="font-size:12px;color:#555;">${esc(cEmail)}</div>`:''}
-      </div>
-
-      <!-- ITEMS -->
-      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
-        <thead><tr style="background:#111;color:#fff;">
-          <th style="padding:8px;text-align:left;">Descripción</th>
-          <th style="padding:8px;text-align:right;">Cant.</th>
-          <th style="padding:8px;text-align:right;">Precio</th>
-          <th style="padding:8px;text-align:right;">Total</th>
-        </tr></thead>
-        <tbody>
-          ${items.map((i,idx)=>`<tr style="background:${idx%2?'#f8f8f8':'#fff'};">
-            <td style="padding:8px;border-bottom:1px solid #eee;">${esc(i.desc)}</td>
-            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;">${i.qty}</td>
-            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;">${fmt(i.price)}</td>
-            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-weight:700;">${fmt(i.total)}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-
-      <!-- TOTALS -->
-      <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
-        <div style="width:220px;">
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;"><span>Subtotal</span><span style="font-family:monospace;">${fmt(subtotal)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;"><span>IVA (${currentUser?.tax_rate??12}%)</span><span style="font-family:monospace;">${fmt(tax)}</span></div>
-          <div style="display:flex;justify-content:space-between;padding:10px;background:#e63329;color:#fff;border-radius:6px;font-size:15px;font-weight:700;margin-top:6px;"><span>TOTAL</span><span style="font-family:monospace;">${fmt(total)}</span></div>
-        </div>
-      </div>
-
-      ${notes?`<div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#444;"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">NOTAS</div>${esc(notes)}</div>`:''}
-
-      <!-- SIGNATURES -->
-      <div style="display:flex;justify-content:space-around;margin-top:32px;padding-top:24px;border-top:1px solid #eee;">
-        <div style="text-align:center;"><div style="width:140px;border-top:1.5px solid #333;margin:0 auto;padding-top:6px;font-size:11px;color:#555;">Firma Cliente</div></div>
-        <div style="text-align:center;"><div style="width:140px;border-top:1.5px solid #333;margin:0 auto;padding-top:6px;font-size:11px;color:#555;">Firma Técnico</div></div>
-      </div>
-
-      <div style="text-align:center;margin-top:20px;font-size:10px;color:#bbb;">Generado con QuotePro · ${new Date().toLocaleString()}</div>
-    </div><!-- end pdf-content -->
-    </div>
-  </div>`;
-
-  // Inject overlay directly into the page — works on mobile WebView
-  document.body.insertAdjacentHTML('beforeend', pdfHTML);
-  toast('PDF listo — toca el botón rojo para guardar', 'success');
-}
-
-// ─── DESCARGAR / COMPARTIR PDF ────────────────────────────────
-async function compartirPDF() {
-  toast('Generando PDF...', 'success');
-  const overlay = document.getElementById('pdfOverlay');
-  if (!overlay) return;
-
-  // Hide buttons before capture
-  const btnBar = overlay.querySelector('#pdf-btn-bar');
-  if (btnBar) btnBar.style.display = 'none';
-
-  const content = overlay.querySelector('#pdf-content');
+  const payload = {
+    quote_num:    document.getElementById('quoteNum').value       || 'COT-0001',
+    client_name:  document.getElementById('clientName').value     || '-',
+    client_phone: document.getElementById('clientPhone').value    || '',
+    client_email: document.getElementById('clientEmail').value    || '',
+    notes:        document.getElementById('quoteNotes').value     || '',
+    status:       document.getElementById('quoteStatus').value    || 'pendiente',
+    date:         document.getElementById('quoteDate').value      || '',
+    company:      document.getElementById('companyName').value    || 'Mi Empresa',
+    address:      document.getElementById('companyAddress').value || '',
+    phone:        document.getElementById('companyPhone').value   || '',
+    email:        document.getElementById('companyEmail').value   || '',
+    tax_rate:     currentUser?.tax_rate ?? 12,
+    items, subtotal, tax, total
+  };
 
   try {
-    const canvas = await html2canvas(content, {
-      scale: 2, backgroundColor: '#ffffff', useCORS: true
+    toast('Generando PDF...', 'success');
+    const res  = await fetch('/api/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
     });
 
-    if (btnBar) btnBar.style.display = '';
+    if (!res.ok) throw new Error('Error del servidor');
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const pdfW = pdf.internal.pageSize.getWidth();
-    const pdfH = pdf.internal.pageSize.getHeight();
-    const ratio = canvas.width / canvas.height;
-    const imgH  = pdfW / ratio;
-
-    if (imgH <= pdfH) {
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, imgH);
-    } else {
-      let y = 0;
-      const sliceH = Math.floor(canvas.height * pdfH / imgH);
-      let page = 0;
-      while (y < canvas.height) {
-        if (page > 0) pdf.addPage();
-        const tmp = document.createElement('canvas');
-        tmp.width  = canvas.width;
-        tmp.height = Math.min(sliceH, canvas.height - y);
-        tmp.getContext('2d').drawImage(canvas, 0, -y);
-        pdf.addImage(tmp.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pdfW, pdfH);
-        y += sliceH; page++;
-      }
-    }
-
-    // Try Web Share API first (Android native share sheet)
-    const qNum = document.getElementById('quoteNum')?.value || 'COT-0001';
-    const blob = pdf.output('blob');
-    const file = new File([blob], `${qNum}.pdf`, { type: 'application/pdf' });
-
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: `Cotización ${qNum}` });
-      toast('PDF compartido ✓', 'success');
-    } else {
-      // Fallback: direct download
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement('a');
-      a.href    = url;
-      a.download = `${qNum}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast('PDF descargado ✓', 'success');
-    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${payload.quote_num}.html`;
+    a.target   = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('PDF descargado ✓', 'success');
   } catch(e) {
-    if (btnBar) btnBar.style.display = '';
     toast('Error al generar PDF', 'error');
-    console.error(e);
   }
 }
+
+
 
 // ─── HELPERS ─────────────────────────────────────────────────
 function fmt(n) {
