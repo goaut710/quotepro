@@ -463,10 +463,11 @@ async function downloadPDF() {
     <div style="background:#fff;min-height:100%;padding:24px;max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#111;">
 
       <!-- TOP BAR -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap;">
+      <div id="pdf-btn-bar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap;">
         <button onclick="document.getElementById('pdfOverlay').remove()" style="background:#333;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;">✕ Cerrar</button>
-        <button onclick="window.print()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Guardar PDF</button>
+        <button onclick="compartirPDF()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">⬇️ Descargar PDF</button>
       </div>
+      <div id="pdf-content">
 
       <!-- HEADER -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #e63329;padding-bottom:16px;flex-wrap:wrap;gap:10px;">
@@ -528,12 +529,84 @@ async function downloadPDF() {
       </div>
 
       <div style="text-align:center;margin-top:20px;font-size:10px;color:#bbb;">Generado con QuotePro · ${new Date().toLocaleString()}</div>
+    </div><!-- end pdf-content -->
     </div>
   </div>`;
 
   // Inject overlay directly into the page — works on mobile WebView
   document.body.insertAdjacentHTML('beforeend', pdfHTML);
   toast('PDF listo — toca el botón rojo para guardar', 'success');
+}
+
+// ─── DESCARGAR / COMPARTIR PDF ────────────────────────────────
+async function compartirPDF() {
+  toast('Generando PDF...', 'success');
+  const overlay = document.getElementById('pdfOverlay');
+  if (!overlay) return;
+
+  // Hide buttons before capture
+  const btnBar = overlay.querySelector('#pdf-btn-bar');
+  if (btnBar) btnBar.style.display = 'none';
+
+  const content = overlay.querySelector('#pdf-content');
+
+  try {
+    const canvas = await html2canvas(content, {
+      scale: 2, backgroundColor: '#ffffff', useCORS: true
+    });
+
+    if (btnBar) btnBar.style.display = '';
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+    const pdfW = pdf.internal.pageSize.getWidth();
+    const pdfH = pdf.internal.pageSize.getHeight();
+    const ratio = canvas.width / canvas.height;
+    const imgH  = pdfW / ratio;
+
+    if (imgH <= pdfH) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, imgH);
+    } else {
+      let y = 0;
+      const sliceH = Math.floor(canvas.height * pdfH / imgH);
+      let page = 0;
+      while (y < canvas.height) {
+        if (page > 0) pdf.addPage();
+        const tmp = document.createElement('canvas');
+        tmp.width  = canvas.width;
+        tmp.height = Math.min(sliceH, canvas.height - y);
+        tmp.getContext('2d').drawImage(canvas, 0, -y);
+        pdf.addImage(tmp.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pdfW, pdfH);
+        y += sliceH; page++;
+      }
+    }
+
+    // Try Web Share API first (Android native share sheet)
+    const qNum = document.getElementById('quoteNum')?.value || 'COT-0001';
+    const blob = pdf.output('blob');
+    const file = new File([blob], `${qNum}.pdf`, { type: 'application/pdf' });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: `Cotización ${qNum}` });
+      toast('PDF compartido ✓', 'success');
+    } else {
+      // Fallback: direct download
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href    = url;
+      a.download = `${qNum}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('PDF descargado ✓', 'success');
+    }
+  } catch(e) {
+    if (btnBar) btnBar.style.display = '';
+    toast('Error al generar PDF', 'error');
+    console.error(e);
+  }
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
