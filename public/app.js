@@ -460,32 +460,14 @@ async function downloadPDF() {
   };
 
   try {
-    toast('Generando PDF...', 'success');
-    const res  = await fetch('/api/pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) throw new Error('Error del servidor');
-
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `${payload.quote_num}.html`;
-    a.target   = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-    toast('PDF descargado ✓', 'success');
+    toast('Abriendo cotización...', 'success');
+    // Build URL with data as query param encoded
+    const dataStr  = encodeURIComponent(JSON.stringify(payload));
+    window.location.href = `/api/pdf?data=${dataStr}`;
   } catch(e) {
-    toast('Error al generar PDF', 'error');
+    toast('Error al generar cotización', 'error');
   }
 }
-
 
 
 // ─── HELPERS ─────────────────────────────────────────────────

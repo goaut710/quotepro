@@ -239,8 +239,12 @@ app.delete('/api/quotes/:id', requireAuth, (req, res) => {
 });
 
 // ─── PDF GENERATION ──────────────────────────────────────────
-app.post('/api/pdf', requireAuth, (req, res) => {
-  const { quote_num, client_name, client_phone, client_email, items, subtotal, tax, total, notes, status, company, address, phone, email, tax_rate, date } = req.body;
+app.get('/api/pdf', requireAuth, (req, res) => {
+  let payload;
+  try { payload = JSON.parse(decodeURIComponent(req.query.data || '{}')); }
+  catch(e) { return res.status(400).send('Datos inválidos'); }
+
+  const { quote_num, client_name, client_phone, client_email, items, subtotal, tax, total, notes, status, company, address, phone, email, tax_rate, date } = payload;
 
   const fmt = n => `Q ${Number(n||0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -251,30 +255,40 @@ app.post('/api/pdf', requireAuth, (req, res) => {
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Cotización ${esc(quote_num)}</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 794px; margin: auto; font-size: 13px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 2px solid #e63329; padding-bottom: 18px; }
-  .quote-title { font-size: 26px; font-weight: 800; color: #e63329; }
-  .client-box { background: #f8f8f8; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  thead tr { background: #111; color: #fff; }
-  th, td { padding: 8px 10px; text-align: left; }
-  th:not(:first-child), td:not(:first-child) { text-align: right; }
-  tr:nth-child(even) td { background: #f8f8f8; }
-  td { border-bottom: 1px solid #eee; }
-  .totals { display: flex; justify-content: flex-end; margin-bottom: 20px; }
-  .totals-box { width: 220px; }
-  .t-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; color: #555; }
-  .t-total { background: #e63329; color: #fff; padding: 8px 10px; border-radius: 6px; display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; margin-top: 6px; }
-  .sigs { display: flex; justify-content: space-around; margin-top: 36px; padding-top: 24px; border-top: 1px solid #eee; }
-  .sig { width: 140px; border-top: 1.5px solid #333; padding-top: 6px; font-size: 11px; color: #555; text-align: center; }
-  .footer { text-align: center; margin-top: 20px; font-size: 10px; color: #bbb; }
-  @media print { body { padding: 0; } }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; color:#111; background:#fff; padding:28px; max-width:794px; margin:auto; font-size:13px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; border-bottom:2px solid #e63329; padding-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .quote-title { font-size:24px; font-weight:800; color:#e63329; }
+  .client-box { background:#f8f8f8; border-radius:8px; padding:12px 16px; margin-bottom:18px; }
+  table { width:100%; border-collapse:collapse; margin-bottom:16px; }
+  thead tr { background:#111; color:#fff; }
+  th,td { padding:8px 10px; text-align:left; }
+  th:not(:first-child),td:not(:first-child) { text-align:right; }
+  tr:nth-child(even) td { background:#f8f8f8; }
+  td { border-bottom:1px solid #eee; }
+  .totals { display:flex; justify-content:flex-end; margin-bottom:18px; }
+  .totals-box { width:220px; }
+  .t-row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #eee; color:#555; }
+  .t-total { background:#e63329; color:#fff; padding:8px 10px; border-radius:6px; display:flex; justify-content:space-between; font-size:15px; font-weight:700; margin-top:6px; }
+  .sigs { display:flex; justify-content:space-around; margin-top:32px; padding-top:20px; border-top:1px solid #eee; }
+  .sig { width:140px; border-top:1.5px solid #333; padding-top:6px; font-size:11px; color:#555; text-align:center; }
+  .footer { text-align:center; margin-top:18px; font-size:10px; color:#bbb; }
+  .save-bar { background:#111; padding:12px 20px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:20px; border-radius:8px; }
+  .save-btn { background:#e63329; color:#fff; border:none; border-radius:6px; padding:10px 20px; font-size:14px; font-weight:700; cursor:pointer; }
+  .back-btn { background:#333; color:#fff; border:none; border-radius:6px; padding:10px 16px; font-size:13px; cursor:pointer; }
+  @media print { .save-bar { display:none; } }
 </style>
 </head>
 <body>
+<div class="save-bar">
+  <button class="back-btn" onclick="history.back()">← Volver</button>
+  <span style="color:#aaa;font-size:12px;">Para guardar como PDF: usa Imprimir → Guardar como PDF</span>
+  <button class="save-btn" onclick="window.print()">🖨️ Guardar PDF</button>
+</div>
+
 <div class="header">
   <div>
     <div style="font-size:17px;font-weight:700;">${esc(company)}</div>
@@ -299,7 +313,7 @@ app.post('/api/pdf', requireAuth, (req, res) => {
 <table>
   <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Total</th></tr></thead>
   <tbody>
-    ${(items||[]).map((i,idx)=>`<tr><td>${esc(i.desc)}</td><td style="text-align:right">${i.qty}</td><td style="text-align:right;font-family:monospace">${fmt(i.price)}</td><td style="text-align:right">${i.disc||0}%</td><td style="text-align:right;font-family:monospace;font-weight:700">${fmt(i.total)}</td></tr>`).join('')}
+    ${(items||[]).map(i=>`<tr><td>${esc(i.desc)}</td><td>${i.qty}</td><td style="font-family:monospace">${fmt(i.price)}</td><td>${i.disc||0}%</td><td style="font-family:monospace;font-weight:700">${fmt(i.total)}</td></tr>`).join('')}
   </tbody>
 </table>
 
@@ -311,18 +325,16 @@ app.post('/api/pdf', requireAuth, (req, res) => {
   </div>
 </div>
 
-${notes?`<div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#444;"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">NOTAS</div>${esc(notes)}</div>`:''}
+${notes?`<div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:12px;color:#444;"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">NOTAS</div>${esc(notes)}</div>`:''}
 
 <div class="sigs">
   <div><div class="sig">Firma Cliente</div></div>
   <div><div class="sig">Firma Técnico / Vendedor</div></div>
 </div>
-
 <div class="footer">Generado con QuotePro · ${new Date().toLocaleString()}</div>
 </body></html>`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${quote_num}.html"`);
   res.send(html);
 });
 
