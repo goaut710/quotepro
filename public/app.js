@@ -456,19 +456,96 @@ async function downloadPDF() {
     phone:        document.getElementById('companyPhone').value   || '',
     email:        document.getElementById('companyEmail').value   || '',
     tax_rate:     currentUser?.tax_rate ?? 12,
+    signature:    window._savedSignature || '',
     items, subtotal, tax, total
   };
 
   try {
     toast('Abriendo cotización...', 'success');
-    // Build URL with data as query param encoded
-    const dataStr  = encodeURIComponent(JSON.stringify(payload));
+    const dataStr = encodeURIComponent(JSON.stringify(payload));
     window.location.href = `/api/pdf?data=${dataStr}`;
   } catch(e) {
     toast('Error al generar cotización', 'error');
   }
 }
 
+// ─── FIRMA DIGITAL ───────────────────────────────────────────
+function openSignaturePad() {
+  if (document.getElementById('sigModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'sigModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#0f0f11;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:100%;max-width:480px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-size:16px;font-weight:700;color:#f2f2f4">Firma Digital</span>
+        <button onclick="document.getElementById('sigModal').remove()" style="background:none;border:none;color:#8c8c9e;cursor:pointer;font-size:18px;padding:4px 8px">✕</button>
+      </div>
+      <p style="font-size:13px;color:#8c8c9e;margin-bottom:12px">Dibuja tu firma con el dedo o el mouse:</p>
+      <canvas id="sigCanvas" width="420" height="160" style="background:#fff;border-radius:8px;width:100%;touch-action:none;display:block;cursor:crosshair"></canvas>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+        <button onclick="clearSig()" style="background:#1c1c20;color:#8c8c9e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-family:inherit">Borrar</button>
+        <button onclick="saveSig()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Guardar firma</button>
+      </div>
+      ${window._savedSignature ? `<div style="margin-top:12px;text-align:center"><img src="${window._savedSignature}" style="max-height:50px;opacity:0.6"/><p style="font-size:11px;color:#4a4a5a;margin-top:4px">Firma guardada actualmente</p></div>` : ''}
+    </div>`;
+  document.body.appendChild(modal);
+
+  const canvas = document.getElementById('sigCanvas');
+  const ctx    = canvas.getContext('2d');
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth   = 2.5;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  let drawing = false, lastX = 0, lastY = 0;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  }
+  function start(e) { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }
+  function draw(e)  {
+    e.preventDefault();
+    if (!drawing) return;
+    const p = getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
+    lastX = p.x; lastY = p.y;
+  }
+  function stop(e)  { e.preventDefault(); drawing = false; }
+
+  canvas.addEventListener('mousedown',  start);
+  canvas.addEventListener('mousemove',  draw);
+  canvas.addEventListener('mouseup',    stop);
+  canvas.addEventListener('touchstart', start, { passive: false });
+  canvas.addEventListener('touchmove',  draw,  { passive: false });
+  canvas.addEventListener('touchend',   stop,  { passive: false });
+}
+
+function clearSig() {
+  const canvas = document.getElementById('sigCanvas');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function saveSig() {
+  const canvas = document.getElementById('sigCanvas');
+  if (!canvas) return;
+  window._savedSignature = canvas.toDataURL('image/png');
+  document.getElementById('sigModal').remove();
+  toast('Firma guardada ✓', 'success');
+  updateSigBtn();
+}
+
+function updateSigBtn() {
+  const btn = document.getElementById('sigBtn');
+  if (btn) {
+    btn.textContent = window._savedSignature ? '✅ Firma' : '✍️ Firma';
+    btn.style.borderColor = window._savedSignature ? 'rgba(34,197,94,0.5)' : '';
+    btn.style.color = window._savedSignature ? '#22c55e' : '';
+  }
+}
 
 // ─── HELPERS ─────────────────────────────────────────────────
 function fmt(n) {
