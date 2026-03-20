@@ -457,118 +457,83 @@ async function downloadPDF() {
   // Detect mobile
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-  // Build printable HTML
-  const htmlContent = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Cotización ${qNum}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; color: #111; background: #fff; padding: 32px; max-width: 794px; margin: auto; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; border-bottom: 2px solid #e63329; padding-bottom: 20px; }
-  .company-name { font-size: 18px; font-weight: 700; }
-  .company-info { font-size: 12px; color: #555; margin-top: 4px; }
-  .quote-title { font-size: 26px; font-weight: 800; color: #e63329; text-align: right; }
-  .quote-num { font-size: 18px; font-weight: 700; font-family: monospace; text-align: right; margin-top: 4px; }
-  .quote-date { font-size: 12px; color: #555; text-align: right; margin-top: 4px; }
-  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-top: 6px; }
-  .client-box { background: #f8f8f8; border-radius: 8px; padding: 14px 18px; margin-bottom: 24px; }
-  .client-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: #888; margin-bottom: 8px; }
-  .client-name { font-size: 15px; font-weight: 700; }
-  .client-info { font-size: 12px; color: #555; margin-top: 3px; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
-  thead tr { background: #111; color: #fff; }
-  th { padding: 9px 10px; text-align: left; }
-  th:not(:first-child) { text-align: right; }
-  td { padding: 8px 10px; border-bottom: 1px solid #eee; }
-  td:not(:first-child) { text-align: right; font-family: monospace; }
-  tr:nth-child(even) { background: #f8f8f8; }
-  .totals { display: flex; justify-content: flex-end; margin-bottom: 28px; }
-  .totals-box { width: 240px; }
-  .totals-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #eee; font-size: 13px; color: #555; }
-  .totals-row span:last-child { font-family: monospace; }
-  .total-final { background: #e63329; color: #fff; padding: 10px; border-radius: 6px; display: flex; justify-content: space-between; font-size: 16px; font-weight: 700; margin-top: 6px; }
-  .notes-box { background: #f8f8f8; border-radius: 8px; padding: 12px 16px; margin-bottom: 28px; font-size: 12px; color: #444; }
-  .notes-label { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; color: #888; margin-bottom: 6px; }
-  .signatures { display: flex; justify-content: space-around; margin-top: 40px; padding-top: 28px; border-top: 1px solid #eee; }
-  .sig-line { width: 160px; border-top: 1.5px solid #333; margin: 0 auto; padding-top: 8px; font-size: 11px; color: #555; text-align: center; }
-  .footer { text-align: center; margin-top: 24px; font-size: 10px; color: #bbb; }
-  .print-btn { position: fixed; bottom: 20px; right: 20px; background: #e63329; color: #fff; border: none; border-radius: 10px; padding: 14px 24px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 999; }
-  @media print { .print-btn { display: none; } body { padding: 0; } }
-</style>
-</head>
-<body>
-<div class="header">
-  <div>
-    ${logoDataURL ? `<img src="${logoDataURL}" style="height:50px;object-fit:contain;margin-bottom:6px;display:block"/>` : ''}
-    <div class="company-name">${esc(company)}</div>
-    <div class="company-info">${esc(address)}</div>
-    <div class="company-info">${esc(phone)}${email ? ' · ' + esc(email) : ''}</div>
-  </div>
-  <div>
-    <div class="quote-title">COTIZACIÓN</div>
-    <div class="quote-num">${qNum}</div>
-    <div class="quote-date">Fecha: ${formatDate(qDate)}</div>
-    <div style="text-align:right">
-      <span class="status-badge" style="background:${status==='aprobada'?'#d1fae5':status==='rechazada'?'#fee2e2':'#fef3c7'};color:${status==='aprobada'?'#065f46':status==='rechazada'?'#991b1b':'#92400e'}">${status}</span>
+  // Build PDF content inline (works on mobile WebView)
+  const pdfHTML = `
+  <div id="pdfOverlay" style="position:fixed;inset:0;background:#000;z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+    <div style="background:#fff;min-height:100%;padding:24px;max-width:700px;margin:0 auto;font-family:Arial,sans-serif;color:#111;">
+
+      <!-- TOP BAR -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:10px;flex-wrap:wrap;">
+        <button onclick="document.getElementById('pdfOverlay').remove()" style="background:#333;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;cursor:pointer;">✕ Cerrar</button>
+        <button onclick="window.print()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;">🖨️ Guardar PDF</button>
+      </div>
+
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #e63329;padding-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div>
+          ${logoDataURL ? `<img src="${logoDataURL}" style="height:44px;object-fit:contain;margin-bottom:6px;display:block"/>` : ''}
+          <div style="font-size:16px;font-weight:700;">${esc(company)}</div>
+          <div style="font-size:11px;color:#555;">${esc(address)}</div>
+          <div style="font-size:11px;color:#555;">${esc(phone)}${email?' · '+esc(email):''}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:22px;font-weight:800;color:#e63329;">COTIZACIÓN</div>
+          <div style="font-size:16px;font-weight:700;font-family:monospace;">${qNum}</div>
+          <div style="font-size:11px;color:#555;">Fecha: ${formatDate(qDate)}</div>
+          <span style="display:inline-block;margin-top:4px;background:${status==='aprobada'?'#d1fae5':status==='rechazada'?'#fee2e2':'#fef3c7'};color:${status==='aprobada'?'#065f46':status==='rechazada'?'#991b1b':'#92400e'};padding:2px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;">${status}</span>
+        </div>
+      </div>
+
+      <!-- CLIENT -->
+      <div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">DATOS DEL CLIENTE</div>
+        <div style="font-size:14px;font-weight:700;">${esc(client)}</div>
+        ${cPhone?`<div style="font-size:12px;color:#555;">${esc(cPhone)}</div>`:''}
+        ${cEmail?`<div style="font-size:12px;color:#555;">${esc(cEmail)}</div>`:''}
+      </div>
+
+      <!-- ITEMS -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;">
+        <thead><tr style="background:#111;color:#fff;">
+          <th style="padding:8px;text-align:left;">Descripción</th>
+          <th style="padding:8px;text-align:right;">Cant.</th>
+          <th style="padding:8px;text-align:right;">Precio</th>
+          <th style="padding:8px;text-align:right;">Total</th>
+        </tr></thead>
+        <tbody>
+          ${items.map((i,idx)=>`<tr style="background:${idx%2?'#f8f8f8':'#fff'};">
+            <td style="padding:8px;border-bottom:1px solid #eee;">${esc(i.desc)}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;">${i.qty}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;">${fmt(i.price)}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid #eee;font-family:monospace;font-weight:700;">${fmt(i.total)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+
+      <!-- TOTALS -->
+      <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+        <div style="width:220px;">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;"><span>Subtotal</span><span style="font-family:monospace;">${fmt(subtotal)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee;font-size:13px;color:#555;"><span>IVA (${currentUser?.tax_rate??12}%)</span><span style="font-family:monospace;">${fmt(tax)}</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px;background:#e63329;color:#fff;border-radius:6px;font-size:15px;font-weight:700;margin-top:6px;"><span>TOTAL</span><span style="font-family:monospace;">${fmt(total)}</span></div>
+        </div>
+      </div>
+
+      ${notes?`<div style="background:#f8f8f8;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#444;"><div style="font-size:9px;font-weight:700;letter-spacing:1.5px;color:#888;margin-bottom:6px;">NOTAS</div>${esc(notes)}</div>`:''}
+
+      <!-- SIGNATURES -->
+      <div style="display:flex;justify-content:space-around;margin-top:32px;padding-top:24px;border-top:1px solid #eee;">
+        <div style="text-align:center;"><div style="width:140px;border-top:1.5px solid #333;margin:0 auto;padding-top:6px;font-size:11px;color:#555;">Firma Cliente</div></div>
+        <div style="text-align:center;"><div style="width:140px;border-top:1.5px solid #333;margin:0 auto;padding-top:6px;font-size:11px;color:#555;">Firma Técnico</div></div>
+      </div>
+
+      <div style="text-align:center;margin-top:20px;font-size:10px;color:#bbb;">Generado con QuotePro · ${new Date().toLocaleString()}</div>
     </div>
-  </div>
-</div>
+  </div>`;
 
-<div class="client-box">
-  <div class="client-label">DATOS DEL CLIENTE</div>
-  <div class="client-name">${esc(client)}</div>
-  ${cPhone ? `<div class="client-info">${esc(cPhone)}</div>` : ''}
-  ${cEmail ? `<div class="client-info">${esc(cEmail)}</div>` : ''}
-</div>
-
-<table>
-  <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Desc.</th><th>Total</th></tr></thead>
-  <tbody>
-    ${items.map(i => `<tr>
-      <td>${esc(i.desc)}</td>
-      <td>${i.qty}</td>
-      <td>${fmt(i.price)}</td>
-      <td>${i.disc||0}%</td>
-      <td>${fmt(i.total)}</td>
-    </tr>`).join('')}
-  </tbody>
-</table>
-
-<div class="totals">
-  <div class="totals-box">
-    <div class="totals-row"><span>Subtotal</span><span>${fmt(subtotal)}</span></div>
-    <div class="totals-row"><span>IVA (${currentUser?.tax_rate??12}%)</span><span>${fmt(tax)}</span></div>
-    <div class="total-final"><span>TOTAL</span><span>${fmt(total)}</span></div>
-  </div>
-</div>
-
-${notes ? `<div class="notes-box"><div class="notes-label">NOTAS</div>${esc(notes)}</div>` : ''}
-
-<div class="signatures">
-  <div><div class="sig-line">Firma Cliente</div></div>
-  <div><div class="sig-line">Firma Técnico / Vendedor</div></div>
-</div>
-
-<div class="footer">Generado con QuotePro · ${new Date().toLocaleString()}</div>
-
-<button class="print-btn" onclick="window.print()">🖨️ Guardar / Imprimir PDF</button>
-</body></html>`;
-
-  // Open in new tab — works on both desktop and mobile
-  const blob = new Blob([htmlContent], { type: 'text/html' });
-  const url  = URL.createObjectURL(blob);
-  const win  = window.open(url, '_blank');
-
-  if (!win) {
-    // If popup blocked, fallback: show instructions
-    toast('Permite las ventanas emergentes para ver el PDF', 'error');
-  } else {
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-    toast('PDF listo — usa el botón rojo para guardar/imprimir', 'success');
-  }
+  // Inject overlay directly into the page — works on mobile WebView
+  document.body.insertAdjacentHTML('beforeend', pdfHTML);
+  toast('PDF listo — toca el botón rojo para guardar', 'success');
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
