@@ -144,11 +144,17 @@ async function loadNextQuoteNum() {
 
 function fillCompanyFromProfile() {
   if (!currentUser) return;
-  document.getElementById('companyName').value    = currentUser.company    || '';
-  document.getElementById('companyAddress').value = currentUser.address    || '';
-  document.getElementById('companyPhone').value   = currentUser.phone      || '';
-  document.getElementById('companyEmail').value   = currentUser.email      || '';
+  // Datos fijos de Constructora D'Sanchez
+  document.getElementById('companyName').value    = "Constructora D'Sanchez";
+  document.getElementById('companyAddress').value = 'Carcha A.V.';
+  document.getElementById('companyPhone').value   = '+502 4995 4123';
+  document.getElementById('companyEmail').value   = 'sanchezsierra035@gmail.com';
   document.getElementById('taxRateDisplay').textContent = currentUser.tax_rate ?? 12;
+  // Cargar logo automáticamente
+  const box = document.getElementById('logoBox');
+  if (box && !box.querySelector('img')) {
+    box.innerHTML = '<img src="/logo.jpg" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" onerror="this.style.display='none'" />';
+  }
 }
 
 // ── ROWS ────────────────────────────────────────────────────────

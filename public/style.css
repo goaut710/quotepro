@@ -702,3 +702,39 @@ input:focus, textarea:focus, select:focus {
   .company-fields, .client-fields, .settings-grid { grid-template-columns: 1fr; }
   .full { grid-column: 1; }
 }
+
+/* ── LOGO BOX FIX ────────────────────────── */
+.company-logo-box {
+  width: 72px !important;
+  height: 72px !important;
+  min-width: 72px !important;
+  overflow: hidden;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.company-logo-box svg {
+  width: 28px !important;
+  height: 28px !important;
+  color: var(--text3);
+  display: none;
+}
+
+.company-logo-box span {
+  font-size: 11px;
+  color: var(--text3);
+  display: none;
+}
+
+.company-logo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
