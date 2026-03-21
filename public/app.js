@@ -1,403 +1,586 @@
-// ═══════════════════════════════════════════════════════
-//  QuotePro — app.js
-//  Constructora D'Sanchez
-// ═══════════════════════════════════════════════════════
+// ============================================================
+//  QuotePro – app.js
+//  Frontend SPA logic
+// ============================================================
 
-let currentUser = null;
-let currentQuote = null;
-let editingId = null;
-let signatureCanvas, signatureCtx, isDrawing = false;
-let catalogProducts = [];
+// ─── State ───────────────────────────────────────────────────
+let currentUser  = null;
+let editingId    = null;   // quote id being edited
+let modalQuoteId = null;
+let logoDataURL  = null;
+let rowCounter   = 0;
 
-// ── UTILIDADES ───────────────────────────────────────────
-const $ = id => document.getElementById(id);
-const fmt = n => 'Q' + parseFloat(n || 0).toFixed(2);
+const API = '';  // same origin
 
-function showPage(page) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  $(page)?.classList.add('active');
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
-}
+// ─── INIT ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  setDate();
+  await checkSession();
+});
 
-function showToast(msg, type = 'success') {
-  const t = document.createElement('div');
-  t.className = `toast toast-${type}`;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.classList.add('show'), 10);
-  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 3000);
-}
-
-// ── AUTH ─────────────────────────────────────────────────
-async function login() {
-  const u = $('loginUser').value.trim();
-  const p = $('loginPass').value.trim();
-  if (!u || !p) return showToast('Completa todos los campos', 'error');
+async function checkSession() {
   try {
-    const r = await fetch('/api/login', {
+    const res = await fetch(`${API}/api/me`, { credentials: 'include' });
+    if (res.ok) {
+      currentUser = await res.json();
+      bootApp();
+    }
+  } catch {}
+}
+
+function bootApp() {
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appShell').classList.remove('hidden');
+  fillCompanyFromProfile();
+  updateUserBadge();
+  addRow(); // default first row
+  loadNextQuoteNum();
+}
+
+// ─── AUTH ────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t, i) => {
+    t.classList.toggle('active', (i === 0 && tab === 'login') || (i === 1 && tab === 'register'));
+  });
+  document.getElementById('loginForm').classList.toggle('hidden',    tab !== 'login');
+  document.getElementById('registerForm').classList.toggle('hidden', tab !== 'register');
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  err.classList.add('hidden');
+  if (!username || !password) return showError(err, 'Completa todos los campos');
+  try {
+    const res = await fetch(`${API}/api/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: u, password: p })
+      credentials: 'include',
+      body: JSON.stringify({ username, password })
     });
-    if (!r.ok) throw new Error();
-    const data = await r.json();
-    currentUser = data.username;
-    $('loginPage').classList.remove('active');
-    $('app').classList.add('active');
-    $('userDisplay').textContent = currentUser;
-    showPage('newQuote');
-    await loadCatalog();
-    generateQuoteNumber();
-    setToday();
-  } catch {
-    showToast('Usuario o contraseña incorrectos', 'error');
-  }
+    const data = await res.json();
+    if (!res.ok) return showError(err, data.error || 'Error al iniciar sesión');
+    currentUser = await (await fetch(`${API}/api/me`, { credentials: 'include' })).json();
+    bootApp();
+  } catch (e) { showError(err, 'Error de conexión'); }
 }
 
-function logout() {
+async function doRegister() {
+  const username = document.getElementById('regUser').value.trim();
+  const password = document.getElementById('regPass').value;
+  const err = document.getElementById('regError');
+  err.classList.add('hidden');
+  if (!username || !password) return showError(err, 'Completa todos los campos');
+  try {
+    const res = await fetch(`${API}/api/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) return showError(err, data.error || 'Error al registrar');
+    toast('Cuenta creada. Inicia sesión.', 'success');
+    switchTab('login');
+  } catch { showError(err, 'Error de conexión'); }
+}
+
+async function doLogout() {
+  await fetch(`${API}/api/logout`, { method: 'POST', credentials: 'include' });
   currentUser = null;
-  $('app').classList.remove('active');
-  $('loginPage').classList.add('active');
-  $('loginUser').value = '';
-  $('loginPass').value = '';
+  editingId   = null;
+  document.getElementById('appShell').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
 }
 
-// ── NÚMERO Y FECHA ───────────────────────────────────────
-async function generateQuoteNumber() {
-  const quotes = await fetch('/api/quotes').then(r => r.json()).catch(() => []);
-  const num = String(quotes.length + 1).padStart(4, '0');
-  $('quoteNumber').value = `COT-${num}`;
+function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+
+function updateUserBadge() {
+  if (!currentUser) return;
+  const name = currentUser.username;
+  document.getElementById('userNameDisplay').textContent = name;
+  document.getElementById('userAvatar').textContent      = name[0].toUpperCase();
 }
 
-function setToday() {
-  $('quoteDate').value = new Date().toLocaleDateString('es-GT');
+// ─── NAVIGATION ──────────────────────────────────────────────
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelector(`.nav-item[data-page="${page}"]`).classList.add('active');
+
+  if (page === 'history')  loadHistory();
+  if (page === 'settings') loadSettings();
+
+  // close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
 }
 
-// ── TABLA DE ÍTEMS ───────────────────────────────────────
-function addItem(name = '', qty = 1, price = 0) {
-  const tbody = $('itemsBody');
-  const row = document.createElement('tr');
-  row.innerHTML = `
-    <td><input class="item-input" type="text" placeholder="Descripción del producto/servicio" value="${name}"/></td>
-    <td><input class="item-input item-qty" type="number" min="1" value="${qty}" onchange="calcRow(this)"/></td>
-    <td><input class="item-input item-price" type="number" min="0" step="0.01" value="${price}" onchange="calcRow(this)"/></td>
-    <td class="item-total">Q0.00</td>
-    <td><button class="btn-del-row" onclick="removeRow(this)">✕</button></td>
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+
+// ─── QUOTE FORM ───────────────────────────────────────────────
+function setDate() {
+  const today = new Date().toISOString().split('T')[0];
+  const el    = document.getElementById('quoteDate');
+  if (el) el.value = today;
+  const disp  = document.getElementById('dateDisplay');
+  if (disp) disp.textContent = formatDate(today);
+}
+
+async function loadNextQuoteNum() {
+  if (editingId) return;
+  try {
+    const quotes = await apiFetch('/api/quotes');
+    const last   = quotes[0]?.quote_num;
+    let num = 1;
+    if (last) { const m = last.match(/(\d+)$/); if (m) num = +m[1] + 1; }
+    const qn = `COT-${String(num).padStart(4,'0')}`;
+    document.getElementById('quoteNum').value       = qn;
+    document.getElementById('quoteNumDisplay').innerHTML = `${qn} · <span id="dateDisplay">${formatDate(document.getElementById('quoteDate').value)}</span>`;
+  } catch {}
+}
+
+function fillCompanyFromProfile() {
+  if (!currentUser) return;
+  document.getElementById('companyName').value    = currentUser.company    || '';
+  document.getElementById('companyAddress').value = currentUser.address    || '';
+  document.getElementById('companyPhone').value   = currentUser.phone      || '';
+  document.getElementById('companyEmail').value   = currentUser.email      || '';
+  document.getElementById('taxRateDisplay').textContent = currentUser.tax_rate ?? 12;
+}
+
+// ── ROWS ────────────────────────────────────────────────────────
+function addRow(desc='', qty=1, price=0, disc=0) {
+  const id   = `row_${rowCounter++}`;
+  const body = document.getElementById('itemsBody');
+  const tr   = document.createElement('tr');
+  tr.id = id;
+  tr.innerHTML = `
+    <td><input class="td-input" placeholder="Descripción del producto o servicio" value="${esc(desc)}" oninput="calcRow('${id}')" /></td>
+    <td><input class="td-input num" type="number" min="1" value="${qty}" oninput="calcRow('${id}')" /></td>
+    <td><input class="td-input num" type="number" min="0" step="0.01" value="${price}" oninput="calcRow('${id}')" /></td>
+    <td><input class="td-input num" type="number" min="0" max="100" value="${disc}" oninput="calcRow('${id}')" /></td>
+    <td><span class="row-total" id="total_${id}">Q 0.00</span></td>
+    <td>
+      <button class="btn-del-row" onclick="delRow('${id}')" title="Eliminar fila">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      </button>
+    </td>
   `;
-  tbody.appendChild(row);
-  calcRow(row.querySelector('.item-qty'));
+  body.appendChild(tr);
+  calcRow(id);
 }
 
-function calcRow(input) {
-  const row = input.closest('tr');
-  const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
-  const price = parseFloat(row.querySelector('.item-price').value) || 0;
-  row.querySelector('.item-total').textContent = fmt(qty * price);
+function calcRow(id) {
+  const tr    = document.getElementById(id);
+  const [,qty,,price,,disc] = [...tr.querySelectorAll('input')].map(i => parseFloat(i.value) || 0);
+  // inputs order: desc, qty, price, disc
+  const inputs = tr.querySelectorAll('input');
+  const q = parseFloat(inputs[1].value) || 0;
+  const p = parseFloat(inputs[2].value) || 0;
+  const d = parseFloat(inputs[3].value) || 0;
+  const total = q * p * (1 - d/100);
+  document.getElementById(`total_${id}`).textContent = fmt(total);
   calcTotals();
 }
 
-function removeRow(btn) {
-  btn.closest('tr').remove();
+function delRow(id) {
+  document.getElementById(id)?.remove();
   calcTotals();
 }
 
 function calcTotals() {
   let sub = 0;
-  document.querySelectorAll('#itemsBody tr').forEach(row => {
-    const qty = parseFloat(row.querySelector('.item-qty')?.value) || 0;
-    const price = parseFloat(row.querySelector('.item-price')?.value) || 0;
-    sub += qty * price;
+  document.querySelectorAll('#itemsBody tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const q = parseFloat(inputs[1]?.value) || 0;
+    const p = parseFloat(inputs[2]?.value) || 0;
+    const d = parseFloat(inputs[3]?.value) || 0;
+    sub += q * p * (1 - d/100);
   });
-  const taxRate = parseFloat($('taxRate')?.value) || 12;
-  const tax = sub * taxRate / 100;
-  $('subtotalDisplay').textContent = fmt(sub);
-  $('taxDisplay').textContent = fmt(tax);
-  $('totalDisplay').textContent = fmt(sub + tax);
+  const rate = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const tax  = sub * rate;
+  const total = sub + tax;
+  document.getElementById('subtotalDisplay').textContent = fmt(sub);
+  document.getElementById('taxDisplay').textContent      = fmt(tax);
+  document.getElementById('totalDisplay').textContent    = fmt(total);
 }
 
-// ── CATÁLOGO DE PRODUCTOS ────────────────────────────────
-async function loadCatalog() {
-  const res = await fetch('/api/products').catch(() => ({ json: () => [] }));
-  catalogProducts = await res.json().catch(() => []);
-  renderCatalog();
-}
-
-function renderCatalog(filter = '') {
-  const list = $('catalogList');
-  if (!list) return;
-  const filtered = catalogProducts.filter(p =>
-    p.name.toLowerCase().includes(filter.toLowerCase()) ||
-    (p.description || '').toLowerCase().includes(filter.toLowerCase())
-  );
-  if (!filtered.length) {
-    list.innerHTML = '<div class="catalog-empty">No hay productos. ¡Agrega el primero!</div>';
-    return;
-  }
-  list.innerHTML = filtered.map(p => `
-    <div class="catalog-item">
-      <div class="catalog-item-info">
-        <span class="catalog-name">${p.name}</span>
-        <span class="catalog-desc">${p.description || ''}</span>
-        <span class="catalog-price">${fmt(p.price)} / ${p.unit || 'unidad'}</span>
-      </div>
-      <div class="catalog-actions">
-        <button class="btn-add-to-quote" onclick="addFromCatalog(${p.id})" title="Agregar a cotización">＋</button>
-        <button class="btn-edit-product" onclick="editProduct(${p.id})" title="Editar">✏️</button>
-        <button class="btn-del-product" onclick="deleteProduct(${p.id})" title="Eliminar">🗑️</button>
-      </div>
-    </div>`).join('');
-}
-
-function addFromCatalog(id) {
-  const p = catalogProducts.find(x => x.id === id);
-  if (!p) return;
-  // Si estamos en nueva cotización, agregar el producto
-  if ($('newQuote').classList.contains('active')) {
-    addItem(p.name, 1, p.price);
-    showToast(`"${p.name}" agregado a la cotización`);
-  } else {
-    showPage('newQuote');
-    setTimeout(() => addItem(p.name, 1, p.price), 200);
-    showToast(`"${p.name}" agregado a la cotización`);
-  }
-}
-
-async function saveProduct() {
-  const name = $('prodName').value.trim();
-  const description = $('prodDesc').value.trim();
-  const price = parseFloat($('prodPrice').value) || 0;
-  const unit = $('prodUnit').value.trim() || 'unidad';
-  const editId = $('editProdId').value;
-
-  if (!name || !price) return showToast('Nombre y precio son requeridos', 'error');
-
-  const url = editId ? `/api/products/${editId}` : '/api/products';
-  const method = editId ? 'PUT' : 'POST';
-
-  await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, description, price, unit })
-  });
-
-  $('prodName').value = '';
-  $('prodDesc').value = '';
-  $('prodPrice').value = '';
-  $('prodUnit').value = 'unidad';
-  $('editProdId').value = '';
-  $('saveProdBtn').textContent = '+ Guardar Producto';
-
-  await loadCatalog();
-  showToast(editId ? 'Producto actualizado' : 'Producto guardado');
-}
-
-function editProduct(id) {
-  const p = catalogProducts.find(x => x.id === id);
-  if (!p) return;
-  $('prodName').value = p.name;
-  $('prodDesc').value = p.description || '';
-  $('prodPrice').value = p.price;
-  $('prodUnit').value = p.unit || 'unidad';
-  $('editProdId').value = p.id;
-  $('saveProdBtn').textContent = '💾 Actualizar Producto';
-  $('prodName').focus();
-}
-
-async function deleteProduct(id) {
-  if (!confirm('¿Eliminar este producto del catálogo?')) return;
-  await fetch(`/api/products/${id}`, { method: 'DELETE' });
-  await loadCatalog();
-  showToast('Producto eliminado');
-}
-
-// ── GUARDAR COTIZACIÓN ───────────────────────────────────
-async function saveQuote(status = 'Pendiente') {
+function getItems() {
   const items = [];
-  document.querySelectorAll('#itemsBody tr').forEach(row => {
-    const desc = row.querySelector('input[type=text]')?.value || '';
-    const qty = parseFloat(row.querySelector('.item-qty')?.value) || 0;
-    const price = parseFloat(row.querySelector('.item-price')?.value) || 0;
-    if (desc || qty || price) {
-      items.push({ description: desc, quantity: qty, price, total: qty * price });
-    }
+  document.querySelectorAll('#itemsBody tr').forEach(tr => {
+    const inputs = tr.querySelectorAll('input');
+    const desc  = inputs[0]?.value || '';
+    const qty   = parseFloat(inputs[1]?.value) || 0;
+    const price = parseFloat(inputs[2]?.value) || 0;
+    const disc  = parseFloat(inputs[3]?.value) || 0;
+    if (desc || price) items.push({ desc, qty, price, disc, total: qty * price * (1 - disc/100) });
   });
+  return items;
+}
 
-  const sub = items.reduce((a, b) => a + b.total, 0);
-  const taxRate = parseFloat($('taxRate')?.value) || 12;
-  const tax = sub * taxRate / 100;
+function resetForm() {
+  editingId = null;
+  document.getElementById('itemsBody').innerHTML = '';
+  document.getElementById('clientName').value  = '';
+  document.getElementById('clientPhone').value = '';
+  document.getElementById('clientEmail').value = '';
+  document.getElementById('quoteNotes').value  = '';
+  document.getElementById('quoteStatus').value = 'pendiente';
+  setDate();
+  addRow();
+  loadNextQuoteNum();
+  calcTotals();
+}
+
+// ── SAVE ───────────────────────────────────────────────────────
+async function saveQuote() {
+  const clientName = document.getElementById('clientName').value.trim();
+  if (!clientName) return toast('El nombre del cliente es obligatorio', 'error');
+
+  const items    = getItems();
+  if (!items.length) return toast('Agrega al menos un ítem', 'error');
+
+  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const subtotal = items.reduce((s, i) => s + i.total, 0);
+  const tax      = subtotal * rate;
+  const total    = subtotal + tax;
 
   const payload = {
-    client_name: $('clientName').value.trim(),
-    client_email: $('clientEmail').value.trim(),
-    client_phone: $('clientPhone').value.trim(),
-    client_address: $('clientAddress').value.trim(),
-    project_description: $('projectDesc').value.trim(),
-    items: JSON.stringify(items),
-    subtotal: sub,
-    tax_rate: taxRate,
-    tax_amount: tax,
-    total: sub + tax,
-    signature: $('signatureData').value || null,
-    status
+    client_name:  clientName,
+    client_phone: document.getElementById('clientPhone').value,
+    client_email: document.getElementById('clientEmail').value,
+    items,
+    subtotal, tax, total,
+    notes:  document.getElementById('quoteNotes').value,
+    status: document.getElementById('quoteStatus').value,
   };
 
-  const url = editingId ? `/api/quotes/${editingId}` : '/api/quotes';
-  const method = editingId ? 'PUT' : 'POST';
-
-  const r = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  const saved = await r.json();
-
-  showToast('✅ Cotización guardada correctamente');
-  editingId = null;
-  clearForm();
-  return saved;
+  try {
+    let res;
+    if (editingId) {
+      res = await apiFetch(`/api/quotes/${editingId}`, 'PUT', payload);
+      toast('Cotización actualizada ✓', 'success');
+    } else {
+      res = await apiFetch('/api/quotes', 'POST', payload);
+      document.getElementById('quoteNum').value = res.quote_num;
+      toast(`Cotización ${res.quote_num} guardada ✓`, 'success');
+    }
+    editingId = editingId || res.id;
+  } catch (e) { toast('Error al guardar', 'error'); }
 }
 
-async function saveAndPDF() {
-  const saved = await saveQuote('Pendiente');
-  const id = saved.id || editingId;
-  if (id) openPDF(id);
+// ─── HISTORY ─────────────────────────────────────────────────
+async function loadHistory(search='') {
+  const list = document.getElementById('quotesList');
+  list.innerHTML = '<div class="empty-state"><p>Cargando...</p></div>';
+  try {
+    const url = search ? `/api/quotes?search=${encodeURIComponent(search)}` : '/api/quotes';
+    const quotes = await apiFetch(url);
+    if (!quotes.length) {
+      list.innerHTML = `<div class="empty-state">
+        <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <p>No hay cotizaciones guardadas</p>
+      </div>`;
+      return;
+    }
+    list.innerHTML = quotes.map(q => `
+      <div class="quote-row">
+        <span class="qr-num">${q.quote_num}</span>
+        <div style="flex:1;overflow:hidden">
+          <div class="qr-client">${esc(q.client_name)}</div>
+          <div class="qr-email">${esc(q.client_email||'')}</div>
+        </div>
+        <span class="status-badge status-${q.status}">${q.status}</span>
+        <span class="qr-total">${fmt(q.total)}</span>
+        <span class="qr-date">${formatDate(q.created_at)}</span>
+        <div class="qr-actions">
+          <button class="qr-btn" onclick="openDetail(${q.id})">Ver</button>
+          <button class="qr-btn del" onclick="deleteQuote(${q.id}, this)">Eliminar</button>
+        </div>
+      </div>
+    `).join('');
+  } catch { list.innerHTML = '<div class="empty-state"><p>Error al cargar historial</p></div>'; }
 }
 
-function openPDF(id) {
-  window.open(`/api/quotes/${id}/pdf`, '_blank');
+let searchTimeout;
+function searchQuotes(val) {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => loadHistory(val), 300);
 }
 
-function clearForm() {
-  $('clientName').value = '';
-  $('clientEmail').value = '';
-  $('clientPhone').value = '';
-  $('clientAddress').value = '';
-  $('projectDesc').value = '';
-  $('itemsBody').innerHTML = '';
-  $('signatureData').value = '';
-  clearSignature();
-  generateQuoteNumber();
-  calcTotals();
-}
-
-// ── FIRMA DIGITAL ────────────────────────────────────────
-function initSignature() {
-  signatureCanvas = $('signatureCanvas');
-  if (!signatureCanvas) return;
-  signatureCtx = signatureCanvas.getContext('2d');
-  signatureCtx.strokeStyle = '#111';
-  signatureCtx.lineWidth = 2;
-  signatureCtx.lineCap = 'round';
-
-  const getPos = e => {
-    const rect = signatureCanvas.getBoundingClientRect();
-    const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
-  };
-
-  signatureCanvas.addEventListener('mousedown', e => { isDrawing = true; const p = getPos(e); signatureCtx.beginPath(); signatureCtx.moveTo(p.x, p.y); });
-  signatureCanvas.addEventListener('mousemove', e => { if (!isDrawing) return; const p = getPos(e); signatureCtx.lineTo(p.x, p.y); signatureCtx.stroke(); });
-  signatureCanvas.addEventListener('mouseup', () => { isDrawing = false; saveSignature(); });
-  signatureCanvas.addEventListener('touchstart', e => { e.preventDefault(); isDrawing = true; const p = getPos(e); signatureCtx.beginPath(); signatureCtx.moveTo(p.x, p.y); }, { passive: false });
-  signatureCanvas.addEventListener('touchmove', e => { e.preventDefault(); if (!isDrawing) return; const p = getPos(e); signatureCtx.lineTo(p.x, p.y); signatureCtx.stroke(); }, { passive: false });
-  signatureCanvas.addEventListener('touchend', () => { isDrawing = false; saveSignature(); });
-}
-
-function saveSignature() {
-  if ($('signatureData')) $('signatureData').value = signatureCanvas.toDataURL();
-}
-
-function clearSignature() {
-  if (signatureCtx) signatureCtx.clearRect(0, 0, signatureCanvas.width, signatureCanvas.height);
-  if ($('signatureData')) $('signatureData').value = '';
-}
-
-// ── HISTORIAL ────────────────────────────────────────────
-async function loadHistory() {
-  const quotes = await fetch('/api/quotes').then(r => r.json()).catch(() => []);
-  const search = $('searchHistory')?.value?.toLowerCase() || '';
-  const filtered = quotes.filter(q =>
-    (q.client_name || '').toLowerCase().includes(search) ||
-    (q.quote_number || '').toLowerCase().includes(search)
-  );
-  const tbody = $('historyBody');
-  if (!tbody) return;
-  if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:#666;">Sin cotizaciones</td></tr>';
-    return;
-  }
-  tbody.innerHTML = filtered.map(q => `
-    <tr>
-      <td>${q.quote_number}</td>
-      <td>${q.client_name || '—'}</td>
-      <td>${fmt(q.total)}</td>
-      <td><span class="badge badge-${q.status?.toLowerCase()}">${q.status}</span></td>
-      <td>${new Date(q.created_at).toLocaleDateString('es-GT')}</td>
-      <td class="history-actions">
-        <button onclick="viewQuote(${q.id})" title="Ver PDF">📄</button>
-        <button onclick="editQuote(${q.id})" title="Editar">✏️</button>
-        <button onclick="deleteQuote(${q.id})" title="Eliminar">🗑️</button>
-      </td>
-    </tr>`).join('');
-}
-
-function viewQuote(id) { openPDF(id); }
-
-async function editQuote(id) {
-  const q = await fetch(`/api/quotes/${id}`).then(r => r.json());
-  editingId = id;
-  $('clientName').value = q.client_name || '';
-  $('clientEmail').value = q.client_email || '';
-  $('clientPhone').value = q.client_phone || '';
-  $('clientAddress').value = q.client_address || '';
-  $('projectDesc').value = q.project_description || '';
-  $('quoteNumber').value = q.quote_number;
-  $('taxRate').value = q.tax_rate || 12;
-  $('itemsBody').innerHTML = '';
-  let items = [];
-  try { items = JSON.parse(q.items || '[]'); } catch(e) {}
-  items.forEach(item => addItem(item.description, item.quantity, item.price));
-  if (q.signature) $('signatureData').value = q.signature;
-  calcTotals();
-  showPage('newQuote');
-  showToast('Cotización cargada para editar');
-}
-
-async function deleteQuote(id) {
+async function deleteQuote(id, btn) {
   if (!confirm('¿Eliminar esta cotización?')) return;
-  await fetch(`/api/quotes/${id}`, { method: 'DELETE' });
-  loadHistory();
-  showToast('Cotización eliminada');
+  try {
+    await apiFetch(`/api/quotes/${id}`, 'DELETE');
+    btn.closest('.quote-row').remove();
+    toast('Cotización eliminada', 'success');
+  } catch { toast('Error al eliminar', 'error'); }
 }
 
-// ── NAVEGACIÓN ───────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  // Login con Enter
-  $('loginPass')?.addEventListener('keypress', e => e.key === 'Enter' && login());
+// ─── MODAL DETAIL ─────────────────────────────────────────────
+async function openDetail(id) {
+  modalQuoteId = id;
+  const q = await apiFetch(`/api/quotes/${id}`);
+  document.getElementById('modalTitle').textContent = `Cotización ${q.quote_num}`;
+  document.getElementById('modalBody').innerHTML = `
+    <div class="detail-section">
+      <h4>CLIENTE</h4>
+      <div class="detail-row"><span class="label">Nombre</span><span class="value">${esc(q.client_name)}</span></div>
+      ${q.client_phone ? `<div class="detail-row"><span class="label">Teléfono</span><span class="value">${esc(q.client_phone)}</span></div>` : ''}
+      ${q.client_email ? `<div class="detail-row"><span class="label">Email</span><span class="value">${esc(q.client_email)}</span></div>` : ''}
+      <div class="detail-row"><span class="label">Estado</span><span class="value"><span class="status-badge status-${q.status}">${q.status}</span></span></div>
+      <div class="detail-row"><span class="label">Fecha</span><span class="value">${formatDate(q.created_at)}</span></div>
+    </div>
+    <div class="detail-section">
+      <h4>ÍTEMS</h4>
+      <table class="detail-items">
+        <thead><tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead>
+        <tbody>
+          ${q.items.map(i => `<tr>
+            <td>${esc(i.desc)}</td>
+            <td>${i.qty}</td>
+            <td>${fmt(i.price)}</td>
+            <td>${fmt(i.total)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="detail-section">
+      <h4>TOTALES</h4>
+      <div class="detail-row"><span class="label">Subtotal</span><span class="value">${fmt(q.subtotal)}</span></div>
+      <div class="detail-row"><span class="label">IVA</span><span class="value">${fmt(q.tax)}</span></div>
+      <div class="detail-row"><span class="label">TOTAL</span><span class="value detail-total">${fmt(q.total)}</span></div>
+    </div>
+    ${q.notes ? `<div class="detail-section"><h4>NOTAS</h4><p style="font-size:13px;color:var(--text2)">${esc(q.notes)}</p></div>` : ''}
+  `;
+  document.getElementById('detailModal').classList.remove('hidden');
+}
 
-  // Navegación sidebar
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const page = item.dataset.page;
-      showPage(page);
-      if (page === 'history') loadHistory();
-      if (page === 'catalog') { loadCatalog(); }
-    });
-  });
+function closeModal(e) {
+  if (e.target.id === 'detailModal') closeDetailModal();
+}
+function closeDetailModal() {
+  document.getElementById('detailModal').classList.add('hidden');
+  modalQuoteId = null;
+}
+async function deleteFromModal() {
+  if (!modalQuoteId || !confirm('¿Eliminar esta cotización?')) return;
+  await apiFetch(`/api/quotes/${modalQuoteId}`, 'DELETE');
+  closeDetailModal();
+  loadHistory();
+  toast('Cotización eliminada', 'success');
+}
+async function editFromModal() {
+  if (!modalQuoteId) return;
+  const q = await apiFetch(`/api/quotes/${modalQuoteId}`);
+  closeDetailModal();
+  showPage('new');
+  loadQuoteIntoForm(q);
+}
 
-  // Inicializar firma
-  initSignature();
+function loadQuoteIntoForm(q) {
+  editingId = q.id;
+  document.getElementById('quoteNum').value    = q.quote_num;
+  document.getElementById('clientName').value  = q.client_name;
+  document.getElementById('clientPhone').value = q.client_phone || '';
+  document.getElementById('clientEmail').value = q.client_email || '';
+  document.getElementById('quoteNotes').value  = q.notes || '';
+  document.getElementById('quoteStatus').value = q.status || 'pendiente';
+  document.getElementById('itemsBody').innerHTML = '';
+  q.items.forEach(i => addRow(i.desc, i.qty, i.price, i.disc || 0));
+  calcTotals();
+  document.getElementById('quoteNumDisplay').textContent = `Editando ${q.quote_num}`;
+}
 
-  // Buscar en historial
-  $('searchHistory')?.addEventListener('input', loadHistory);
+// ─── SETTINGS ─────────────────────────────────────────────────
+function loadSettings() {
+  if (!currentUser) return;
+  document.getElementById('setCompany').value = currentUser.company    || '';
+  document.getElementById('setAddress').value = currentUser.address    || '';
+  document.getElementById('setPhone').value   = currentUser.phone      || '';
+  document.getElementById('setEmail').value   = currentUser.email      || '';
+  document.getElementById('setTax').value     = currentUser.tax_rate   ?? 12;
+}
 
-  // Buscar en catálogo
-  $('searchCatalog')?.addEventListener('input', e => renderCatalog(e.target.value));
+async function saveSettings() {
+  const payload = {
+    company:  document.getElementById('setCompany').value,
+    address:  document.getElementById('setAddress').value,
+    phone:    document.getElementById('setPhone').value,
+    email:    document.getElementById('setEmail').value,
+    tax_rate: parseFloat(document.getElementById('setTax').value) || 12,
+  };
+  await apiFetch('/api/me', 'PUT', payload);
+  currentUser = { ...currentUser, ...payload };
+  fillCompanyFromProfile();
+  toast('Configuración guardada ✓', 'success');
+}
 
-  // Tax rate
-  $('taxRate')?.addEventListener('change', calcTotals);
+// ─── LOGO ─────────────────────────────────────────────────────
+function triggerLogoUpload() {
+  document.getElementById('logoInput').click();
+}
+function loadLogo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    logoDataURL = ev.target.result;
+    const box   = document.getElementById('logoBox');
+    box.innerHTML = `<img src="${logoDataURL}" alt="logo" />`;
+  };
+  reader.readAsDataURL(file);
+}
 
-  // Iniciar con login
-  $('loginPage')?.classList.add('active');
+// ─── PDF ─────────────────────────────────────────────────────
+async function downloadPDF() {
+  const items    = getItems();
+  const subtotal = items.reduce((s,i) => s+i.total, 0);
+  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const tax      = subtotal * rate;
+  const total    = subtotal + tax;
+
+  const payload = {
+    quote_num:    document.getElementById('quoteNum').value       || 'COT-0001',
+    client_name:  document.getElementById('clientName').value     || '-',
+    client_phone: document.getElementById('clientPhone').value    || '',
+    client_email: document.getElementById('clientEmail').value    || '',
+    notes:        document.getElementById('quoteNotes').value     || '',
+    status:       document.getElementById('quoteStatus').value    || 'pendiente',
+    date:         document.getElementById('quoteDate').value      || '',
+    company:      document.getElementById('companyName').value    || 'Mi Empresa',
+    address:      document.getElementById('companyAddress').value || '',
+    phone:        document.getElementById('companyPhone').value   || '',
+    email:        document.getElementById('companyEmail').value   || '',
+    tax_rate:     currentUser?.tax_rate ?? 12,
+    signature:    window._savedSignature || '',
+    items, subtotal, tax, total
+  };
+
+  try {
+    toast('Abriendo cotización...', 'success');
+    const dataStr = encodeURIComponent(JSON.stringify(payload));
+    window.location.href = `/api/pdf?data=${dataStr}`;
+  } catch(e) {
+    toast('Error al generar cotización', 'error');
+  }
+}
+
+// ─── FIRMA DIGITAL ───────────────────────────────────────────
+function openSignaturePad() {
+  if (document.getElementById('sigModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'sigModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:#0f0f11;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:100%;max-width:480px;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-size:16px;font-weight:700;color:#f2f2f4">Firma Digital</span>
+        <button onclick="document.getElementById('sigModal').remove()" style="background:none;border:none;color:#8c8c9e;cursor:pointer;font-size:18px;padding:4px 8px">✕</button>
+      </div>
+      <p style="font-size:13px;color:#8c8c9e;margin-bottom:12px">Dibuja tu firma con el dedo o el mouse:</p>
+      <canvas id="sigCanvas" width="420" height="160" style="background:#fff;border-radius:8px;width:100%;touch-action:none;display:block;cursor:crosshair"></canvas>
+      <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end">
+        <button onclick="clearSig()" style="background:#1c1c20;color:#8c8c9e;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;font-family:inherit">Borrar</button>
+        <button onclick="saveSig()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Guardar firma</button>
+      </div>
+      ${window._savedSignature ? `<div style="margin-top:12px;text-align:center"><img src="${window._savedSignature}" style="max-height:50px;opacity:0.6"/><p style="font-size:11px;color:#4a4a5a;margin-top:4px">Firma guardada actualmente</p></div>` : ''}
+    </div>`;
+  document.body.appendChild(modal);
+
+  const canvas = document.getElementById('sigCanvas');
+  const ctx    = canvas.getContext('2d');
+  ctx.strokeStyle = '#111';
+  ctx.lineWidth   = 2.5;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+  let drawing = false, lastX = 0, lastY = 0;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  }
+  function start(e) { e.preventDefault(); drawing = true; const p = getPos(e); lastX = p.x; lastY = p.y; }
+  function draw(e)  {
+    e.preventDefault();
+    if (!drawing) return;
+    const p = getPos(e);
+    ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
+    lastX = p.x; lastY = p.y;
+  }
+  function stop(e)  { e.preventDefault(); drawing = false; }
+
+  canvas.addEventListener('mousedown',  start);
+  canvas.addEventListener('mousemove',  draw);
+  canvas.addEventListener('mouseup',    stop);
+  canvas.addEventListener('touchstart', start, { passive: false });
+  canvas.addEventListener('touchmove',  draw,  { passive: false });
+  canvas.addEventListener('touchend',   stop,  { passive: false });
+}
+
+function clearSig() {
+  const canvas = document.getElementById('sigCanvas');
+  if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function saveSig() {
+  const canvas = document.getElementById('sigCanvas');
+  if (!canvas) return;
+  window._savedSignature = canvas.toDataURL('image/png');
+  document.getElementById('sigModal').remove();
+  toast('Firma guardada ✓', 'success');
+  updateSigBtn();
+}
+
+function updateSigBtn() {
+  const btn = document.getElementById('sigBtn');
+  if (btn) {
+    btn.textContent = window._savedSignature ? '✅ Firma' : '✍️ Firma';
+    btn.style.borderColor = window._savedSignature ? 'rgba(34,197,94,0.5)' : '';
+    btn.style.color = window._savedSignature ? '#22c55e' : '';
+  }
+}
+
+// ─── HELPERS ─────────────────────────────────────────────────
+function fmt(n) {
+  return `Q ${Number(n||0).toLocaleString('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatDate(d) {
+  if (!d) return '';
+  try {
+    const dt = new Date(d.includes('T') ? d : d + 'T12:00:00');
+    return dt.toLocaleDateString('es-GT', { day:'2-digit', month:'short', year:'numeric' });
+  } catch { return d; }
+}
+function toast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = `toast ${type}`;
+  t.classList.remove('hidden');
+  clearTimeout(t._timeout);
+  t._timeout = setTimeout(() => t.classList.add('hidden'), 3200);
+}
+
+async function apiFetch(url, method='GET', body=null) {
+  const opts = { method, credentials: 'include', headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res  = await fetch(`${API}${url}`, opts);
+  if (!res.ok) { const e = await res.json().catch(()=>({error:'Error'})); throw new Error(e.error); }
+  return res.json();
+}
+
+// Enter key on login
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hidden')) {
+    doLogin();
+  }
 });
