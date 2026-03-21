@@ -154,10 +154,7 @@
         <div class="card company-card">
           <div class="card-label">EMISOR</div>
           <div class="company-header">
-            <div class="company-logo-box" id="logoBox" onclick="triggerLogoUpload()">
-              <img src="/logo.jpg" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;"/>
-              <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="loadLogo(event)" />
-            </div>
+            <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="loadLogo(event)" />
             <div class="company-fields">
               <input class="field-transparent large" type="text" id="companyName" placeholder="Nombre de Empresa" />
               <input class="field-transparent" type="text" id="companyAddress" placeholder="Dirección" />
