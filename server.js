@@ -404,4 +404,4 @@ initDB().then(() => {
   app.listen(PORT, () => console.log(`✅  QuotePro corriendo en http://localhost:${PORT}`));
 }).catch(err => {
   console.error('Error iniciando DB:', err);
-});
+}); // restaurado
