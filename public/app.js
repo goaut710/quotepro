@@ -192,20 +192,15 @@ function delRow(id) {
 }
 
 function calcTotals() {
-  let sub = 0;
+  let total = 0;
   document.querySelectorAll('#itemsBody tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const q = parseFloat(inputs[1]?.value) || 0;
     const p = parseFloat(inputs[2]?.value) || 0;
     const d = parseFloat(inputs[3]?.value) || 0;
-    sub += q * p * (1 - d/100);
+    total += q * p * (1 - d/100);
   });
-  const rate = parseFloat(currentUser?.tax_rate ?? 12) / 100;
-  const tax  = sub * rate;
-  const total = sub + tax;
-  document.getElementById('subtotalDisplay').textContent = fmt(sub);
-  document.getElementById('taxDisplay').textContent      = fmt(tax);
-  document.getElementById('totalDisplay').textContent    = fmt(total);
+  document.getElementById('totalDisplay').textContent = fmt(total);
 }
 
 function getItems() {
@@ -240,20 +235,17 @@ async function saveQuote() {
   const clientName = document.getElementById('clientName').value.trim();
   if (!clientName) return toast('El nombre del cliente es obligatorio', 'error');
 
-  const items    = getItems();
+  const items = getItems();
   if (!items.length) return toast('Agrega al menos un ítem', 'error');
 
-  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
-  const subtotal = items.reduce((s, i) => s + i.total, 0);
-  const tax      = subtotal * rate;
-  const total    = subtotal + tax;
+  const total = items.reduce((s, i) => s + i.total, 0);
 
   const payload = {
     client_name:  clientName,
     client_phone: document.getElementById('clientPhone').value,
     client_email: document.getElementById('clientEmail').value,
     items,
-    subtotal, tax, total,
+    subtotal: total, tax: 0, total,
     notes:  document.getElementById('quoteNotes').value,
     status: document.getElementById('quoteStatus').value,
   };
@@ -437,11 +429,8 @@ function loadLogo(e) {
 
 // ─── PDF ─────────────────────────────────────────────────────
 async function downloadPDF() {
-  const items    = getItems();
-  const subtotal = items.reduce((s,i) => s+i.total, 0);
-  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
-  const tax      = subtotal * rate;
-  const total    = subtotal + tax;
+  const items = getItems();
+  const total = items.reduce((s,i) => s+i.total, 0);
 
   const payload = {
     quote_num:    document.getElementById('quoteNum').value       || 'COT-0001',
@@ -455,9 +444,8 @@ async function downloadPDF() {
     address:      document.getElementById('companyAddress').value || '',
     phone:        document.getElementById('companyPhone').value   || '',
     email:        document.getElementById('companyEmail').value   || '',
-    tax_rate:     currentUser?.tax_rate ?? 12,
     signature:    window._savedSignature || '',
-    items, subtotal, tax, total
+    items, total
   };
 
   try {

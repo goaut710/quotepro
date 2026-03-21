@@ -368,9 +368,7 @@ tr:nth-child(even) td{background:#f9f9f9}
 
   <div class="totals">
     <div class="tbox">
-      <div class="tr"><span>Subtotal</span><span style="font-family:monospace">${fmt(subtotal)}</span></div>
-      <div class="tr"><span>IVA (${tax_rate||12}%)</span><span style="font-family:monospace">${fmt(tax)}</span></div>
-      <div class="tt"><span>GRAND TOTAL</span><span style="font-family:monospace">${fmt(total)}</span></div>
+      <div class="tt"><span>TOTAL</span><span style="font-family:monospace">${fmt(total)}</span></div>
     </div>
   </div>
 
