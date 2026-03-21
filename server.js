@@ -27,9 +27,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: 'quotepro_secret_2024',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { maxAge: 24 * 60 * 60 * 1000 }
+  resave: true,
+  saveUninitialized: true,
+  cookie: { maxAge: 24 * 60 * 60 * 1000, secure: false, httpOnly: true, sameSite: 'lax' }
 }));
 
 // ─── Auth Middleware ──────────────────────────────────────────
@@ -404,4 +404,4 @@ initDB().then(() => {
   app.listen(PORT, () => console.log(`✅  QuotePro corriendo en http://localhost:${PORT}`));
 }).catch(err => {
   console.error('Error iniciando DB:', err);
-}); // restaurado
+});
