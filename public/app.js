@@ -111,6 +111,7 @@ function showPage(page) {
 
   if (page === 'history')  loadHistory();
   if (page === 'settings') loadSettings();
+  if (page === 'catalog')  loadCatalog();
 
   // close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
@@ -192,15 +193,20 @@ function delRow(id) {
 }
 
 function calcTotals() {
-  let total = 0;
+  let sub = 0;
   document.querySelectorAll('#itemsBody tr').forEach(tr => {
     const inputs = tr.querySelectorAll('input');
     const q = parseFloat(inputs[1]?.value) || 0;
     const p = parseFloat(inputs[2]?.value) || 0;
     const d = parseFloat(inputs[3]?.value) || 0;
-    total += q * p * (1 - d/100);
+    sub += q * p * (1 - d/100);
   });
-  document.getElementById('totalDisplay').textContent = fmt(total);
+  const rate = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const tax  = sub * rate;
+  const total = sub + tax;
+  document.getElementById('subtotalDisplay').textContent = fmt(sub);
+  document.getElementById('taxDisplay').textContent      = fmt(tax);
+  document.getElementById('totalDisplay').textContent    = fmt(total);
 }
 
 function getItems() {
@@ -235,17 +241,20 @@ async function saveQuote() {
   const clientName = document.getElementById('clientName').value.trim();
   if (!clientName) return toast('El nombre del cliente es obligatorio', 'error');
 
-  const items = getItems();
+  const items    = getItems();
   if (!items.length) return toast('Agrega al menos un ítem', 'error');
 
-  const total = items.reduce((s, i) => s + i.total, 0);
+  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const subtotal = items.reduce((s, i) => s + i.total, 0);
+  const tax      = subtotal * rate;
+  const total    = subtotal + tax;
 
   const payload = {
     client_name:  clientName,
     client_phone: document.getElementById('clientPhone').value,
     client_email: document.getElementById('clientEmail').value,
     items,
-    subtotal: total, tax: 0, total,
+    subtotal, tax, total,
     notes:  document.getElementById('quoteNotes').value,
     status: document.getElementById('quoteStatus').value,
   };
@@ -429,8 +438,11 @@ function loadLogo(e) {
 
 // ─── PDF ─────────────────────────────────────────────────────
 async function downloadPDF() {
-  const items = getItems();
-  const total = items.reduce((s,i) => s+i.total, 0);
+  const items    = getItems();
+  const subtotal = items.reduce((s,i) => s+i.total, 0);
+  const rate     = parseFloat(currentUser?.tax_rate ?? 12) / 100;
+  const tax      = subtotal * rate;
+  const total    = subtotal + tax;
 
   const payload = {
     quote_num:    document.getElementById('quoteNum').value       || 'COT-0001',
@@ -444,25 +456,15 @@ async function downloadPDF() {
     address:      document.getElementById('companyAddress').value || '',
     phone:        document.getElementById('companyPhone').value   || '',
     email:        document.getElementById('companyEmail').value   || '',
+    tax_rate:     currentUser?.tax_rate ?? 12,
     signature:    window._savedSignature || '',
-    items, total
+    items, subtotal, tax, total
   };
 
   try {
     toast('Abriendo cotización...', 'success');
-    // Usar POST con formulario para manejar firma grande
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/api/pdf';
-    form.target = '_blank';
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = 'data';
-    input.value = JSON.stringify(payload);
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
-    document.body.removeChild(form);
+    const dataStr = encodeURIComponent(JSON.stringify(payload));
+    window.location.href = `/api/pdf?data=${dataStr}`;
   } catch(e) {
     toast('Error al generar cotización', 'error');
   }
@@ -584,98 +586,123 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ─── PRODUCTOS GUARDADOS ──────────────────────────────────────
-function getSavedProducts() {
-  try { return JSON.parse(localStorage.getItem('qp_products') || '[]'); } catch { return []; }
-}
-function saveProducts(list) {
-  localStorage.setItem('qp_products', JSON.stringify(list));
-}
 
-function openProductsModal() {
-  if (document.getElementById('productsModal')) return;
-  const products = getSavedProducts();
-  const modal = document.createElement('div');
-  modal.id = 'productsModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
-  modal.innerHTML = `
-    <div style="background:#0f0f11;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:100%;max-width:560px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <span style="font-size:16px;font-weight:700;color:#f2f2f4">Productos Guardados</span>
-        <button onclick="document.getElementById('productsModal').remove()" style="background:none;border:none;color:#8c8c9e;cursor:pointer;font-size:18px;padding:4px 8px">✕</button>
-      </div>
+// ═══════════════════════════════════════════════════════
+//  CATÁLOGO DE PRODUCTOS
+// ═══════════════════════════════════════════════════════
 
-      <!-- Agregar nuevo producto -->
-      <div style="background:#161619;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#4a4a5a;margin-bottom:10px;text-transform:uppercase">Guardar producto nuevo</div>
-        <input id="newProdDesc" class="field-dark" placeholder="Descripción del producto/servicio" style="margin-bottom:8px"/>
-        <div style="display:flex;gap:8px">
-          <input id="newProdPrice" class="field-dark" type="number" placeholder="Precio unitario" min="0" step="0.01" style="flex:1"/>
-          <button onclick="saveNewProduct()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">+ Guardar</button>
-        </div>
-      </div>
+let catalogProducts = [];
 
-      <!-- Lista de productos guardados -->
-      <div style="overflow-y:auto;flex:1" id="productsList">
-        ${products.length === 0
-          ? `<div style="text-align:center;padding:32px;color:#4a4a5a;font-size:13px">No hay productos guardados aún</div>`
-          : products.map((p, i) => `
-            <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid rgba(255,255,255,0.05);hover:background:#161619">
-              <div style="flex:1;overflow:hidden">
-                <div style="font-size:13px;font-weight:600;color:#f2f2f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.desc)}</div>
-                <div style="font-size:11px;color:#8c8c9e;font-family:monospace;margin-top:2px">Q ${Number(p.price).toFixed(2)}</div>
-              </div>
-              <button onclick="useProduct(${i})" style="background:rgba(230,51,41,0.15);color:#ff4a3f;border:1px solid rgba(230,51,41,0.2);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">Agregar</button>
-              <button onclick="deleteProduct(${i})" style="background:none;border:1px solid rgba(255,255,255,0.08);color:#4a4a5a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit">✕</button>
-            </div>`).join('')
-        }
-      </div>
-    </div>`;
-  document.body.appendChild(modal);
-  // Close on backdrop click
-  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-}
-
-function saveNewProduct() {
-  const desc  = document.getElementById('newProdDesc')?.value.trim();
-  const price = parseFloat(document.getElementById('newProdPrice')?.value) || 0;
-  if (!desc) { toast('Escribe una descripción', 'error'); return; }
-  const products = getSavedProducts();
-  // Avoid duplicates
-  if (products.find(p => p.desc.toLowerCase() === desc.toLowerCase())) {
-    toast('Ese producto ya está guardado', 'error'); return;
+async function loadCatalog() {
+  try {
+    const res = await fetch(`${API}/api/products`, { credentials: 'include' });
+    catalogProducts = await res.json();
+    renderCatalog(document.getElementById('catalog-search')?.value || '');
+  } catch(e) {
+    document.getElementById('catalog-list').innerHTML = '<div style="text-align:center;padding:30px;color:#e63329">Error al cargar</div>';
   }
-  products.push({ desc, price });
-  saveProducts(products);
-  toast(`"${desc}" guardado ✓`, 'success');
-  document.getElementById('productsModal').remove();
-  openProductsModal();
 }
 
-function useProduct(index) {
-  const products = getSavedProducts();
-  const p = products[index];
+function renderCatalog(filter = '') {
+  const list = document.getElementById('catalog-list');
+  if (!list) return;
+  const filtered = catalogProducts.filter(p =>
+    p.name.toLowerCase().includes(filter.toLowerCase()) ||
+    (p.description||'').toLowerCase().includes(filter.toLowerCase())
+  );
+  if (!filtered.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:#555">Sin productos. ¡Agrega el primero!</div>';
+    return;
+  }
+  list.innerHTML = filtered.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;color:#f2f2f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div>
+        ${p.description ? `<div style="font-size:11px;color:#666;margin-top:1px">${esc(p.description)}</div>` : ''}
+        <div style="font-size:12px;font-family:monospace;color:#e63329;font-weight:700;margin-top:3px">Q ${Number(p.price||0).toFixed(2)} / ${esc(p.unit||'unidad')}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="addProductToQuote(${p.id})" title="Agregar a cotización" style="background:#e63329;color:#fff;border:none;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:16px;font-weight:700">+</button>
+        <button onclick="editProduct(${p.id})" title="Editar" style="background:#1c1c26;border:1px solid rgba(255,255,255,0.1);color:#aaa;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:13px">✏️</button>
+        <button onclick="deleteProduct(${p.id})" title="Eliminar" style="background:#1c1c26;border:1px solid rgba(255,255,255,0.1);color:#aaa;width:30px;height:30px;border-radius:6px;cursor:pointer;font-size:13px">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function filterCatalog(val) {
+  renderCatalog(val);
+}
+
+async function saveProduct() {
+  const name = document.getElementById('prod-name').value.trim();
+  const description = document.getElementById('prod-desc').value.trim();
+  const price = parseFloat(document.getElementById('prod-price').value) || 0;
+  const unit = document.getElementById('prod-unit').value.trim() || 'unidad';
+  const editId = document.getElementById('prod-edit-id').value;
+
+  if (!name) return toast('El nombre es requerido', 'error');
+
+  const url = editId ? `${API}/api/products/${editId}` : `${API}/api/products`;
+  const method = editId ? 'PUT' : 'POST';
+
+  await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name, description, price, unit })
+  });
+
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-desc').value = '';
+  document.getElementById('prod-price').value = '';
+  document.getElementById('prod-unit').value = 'unidad';
+  document.getElementById('prod-edit-id').value = '';
+  document.getElementById('catalog-form-label').textContent = 'AGREGAR PRODUCTO';
+  document.getElementById('prod-save-btn').textContent = '+ Guardar Producto';
+  document.getElementById('prod-cancel-btn').style.display = 'none';
+
+  await loadCatalog();
+  toast(editId ? 'Producto actualizado ✓' : 'Producto guardado ✓', 'success');
+}
+
+function editProduct(id) {
+  const p = catalogProducts.find(x => x.id === id);
   if (!p) return;
-  addRow(p.desc, 1, p.price, 0);
-  document.getElementById('productsModal').remove();
-  toast(`"${p.desc}" agregado ✓`, 'success');
+  document.getElementById('prod-name').value = p.name;
+  document.getElementById('prod-desc').value = p.description || '';
+  document.getElementById('prod-price').value = p.price;
+  document.getElementById('prod-unit').value = p.unit || 'unidad';
+  document.getElementById('prod-edit-id').value = p.id;
+  document.getElementById('catalog-form-label').textContent = 'EDITAR PRODUCTO';
+  document.getElementById('prod-save-btn').textContent = '💾 Actualizar';
+  document.getElementById('prod-cancel-btn').style.display = 'block';
+  document.getElementById('prod-name').focus();
 }
 
-function deleteProduct(index) {
-  if (!confirm('¿Eliminar este producto guardado?')) return;
-  const products = getSavedProducts();
-  products.splice(index, 1);
-  saveProducts(products);
-  document.getElementById('productsModal').remove();
-  openProductsModal();
+function cancelEditProduct() {
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-desc').value = '';
+  document.getElementById('prod-price').value = '';
+  document.getElementById('prod-unit').value = 'unidad';
+  document.getElementById('prod-edit-id').value = '';
+  document.getElementById('catalog-form-label').textContent = 'AGREGAR PRODUCTO';
+  document.getElementById('prod-save-btn').textContent = '+ Guardar Producto';
+  document.getElementById('prod-cancel-btn').style.display = 'none';
 }
 
-// Auto-save current row product when description is filled
-function saveCurrentRowProduct(desc, price) {
-  if (!desc || !price) return;
-  const products = getSavedProducts();
-  if (!products.find(p => p.desc.toLowerCase() === desc.toLowerCase())) {
-    products.push({ desc, price });
-    saveProducts(products);
-  }
+async function deleteProduct(id) {
+  if (!confirm('¿Eliminar este producto?')) return;
+  await fetch(`${API}/api/products/${id}`, { method: 'DELETE', credentials: 'include' });
+  await loadCatalog();
+  toast('Producto eliminado', 'success');
+}
+
+function addProductToQuote(id) {
+  const p = catalogProducts.find(x => x.id === id);
+  if (!p) return;
+  showPage('new');
+  setTimeout(() => {
+    addRow(p.name, 1, p.price, 0);
+    toast(`"${p.name}" agregado a la cotización ✓`, 'success');
+  }, 100);
 }
