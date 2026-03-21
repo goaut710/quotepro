@@ -4,8 +4,6 @@
 // ============================================================
 
 const express     = require('express');
-const crypto      = require('crypto');
-const tokens      = {}; // token -> userId en memoria
 const session     = require('express-session');
 const bcrypt      = require('bcryptjs');
 const path        = require('path');
@@ -29,21 +27,14 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret: 'quotepro_secret_2024',
-  resave: true,
-  saveUninitialized: true,
-  cookie: { maxAge: 24 * 60 * 60 * 1000, secure: false, httpOnly: true, sameSite: 'lax' }
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
 // ─── Auth Middleware ──────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) return next();
-  // Aceptar token Bearer
-  const auth = req.headers['authorization'] || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (token && tokens[token]) {
-    req.session.userId = tokens[token];
-    return next();
-  }
   res.status(401).json({ error: 'No autorizado' });
 }
 
@@ -152,10 +143,7 @@ app.post('/api/login', (req, res) => {
   }
   req.session.userId   = user.id;
   req.session.username = user.username;
-  // Token para clientes que no soportan cookies
-  const token = crypto.randomBytes(32).toString('hex');
-  tokens[token] = user.id;
-  res.json({ ok: true, username: user.username, token, user: { id: user.id, username: user.username, company: user.company, address: user.address, phone: user.phone, email: user.email, tax_rate: user.tax_rate } });
+  res.json({ ok: true, username: user.username });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -251,9 +239,9 @@ app.delete('/api/quotes/:id', requireAuth, (req, res) => {
 });
 
 // ─── PDF GENERATION ──────────────────────────────────────────
-app.get('/api/pdf', requireAuth, (req, res) => {
+app.post('/api/pdf', requireAuth, (req, res) => {
   let payload;
-  try { payload = JSON.parse(decodeURIComponent(req.query.data || '{}')); }
+  try { payload = JSON.parse(req.body.data || '{}'); }
   catch(e) { return res.status(400).send('Datos inválidos'); }
 
   const { quote_num, client_name, client_phone, client_email, items, subtotal, tax, total, notes, status, company, address, phone, email, tax_rate, date, signature } = payload;

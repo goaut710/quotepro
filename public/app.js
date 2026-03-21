@@ -20,12 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkSession() {
   try {
-    const token = localStorage.getItem('qp_token');
-    if (!token) return;
-    const res = await fetch(`${API}/api/me`, { 
-      credentials: 'include',
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
+    const res = await fetch(`${API}/api/me`, { credentials: 'include' });
     if (res.ok) {
       currentUser = await res.json();
       bootApp();
@@ -66,8 +61,7 @@ async function doLogin() {
     });
     const data = await res.json();
     if (!res.ok) return showError(err, data.error || 'Error al iniciar sesión');
-    if (data.token) localStorage.setItem('qp_token', data.token);
-    currentUser = data.user || data;
+    currentUser = await (await fetch(`${API}/api/me`, { credentials: 'include' })).json();
     bootApp();
   } catch (e) { showError(err, 'Error de conexión'); }
 }
@@ -150,17 +144,11 @@ async function loadNextQuoteNum() {
 
 function fillCompanyFromProfile() {
   if (!currentUser) return;
-  // Datos fijos de Constructora D'Sanchez
-  document.getElementById('companyName').value    = "Constructora D'Sanchez";
-  document.getElementById('companyAddress').value = 'Carcha A.V.';
-  document.getElementById('companyPhone').value   = '+502 4995 4123';
-  document.getElementById('companyEmail').value   = 'sanchezsierra035@gmail.com';
+  document.getElementById('companyName').value    = currentUser.company    || '';
+  document.getElementById('companyAddress').value = currentUser.address    || '';
+  document.getElementById('companyPhone').value   = currentUser.phone      || '';
+  document.getElementById('companyEmail').value   = currentUser.email      || '';
   document.getElementById('taxRateDisplay').textContent = currentUser.tax_rate ?? 12;
-  // Cargar logo automáticamente
-  const box = document.getElementById('logoBox');
-  if (box && !box.querySelector('img')) {
-    box.innerHTML = '<img src="/logo.jpg" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" />';
-  }
 }
 
 // ── ROWS ────────────────────────────────────────────────────────
@@ -474,8 +462,19 @@ async function downloadPDF() {
 
   try {
     toast('Abriendo cotización...', 'success');
-    const dataStr = encodeURIComponent(JSON.stringify(payload));
-    window.location.href = `/api/pdf?data=${dataStr}`;
+    // Usar POST con formulario para manejar firma grande
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/api/pdf';
+    form.target = '_blank';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'data';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    document.body.removeChild(form);
   } catch(e) {
     toast('Error al generar cotización', 'error');
   }
