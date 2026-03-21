@@ -159,7 +159,7 @@ function fillCompanyFromProfile() {
   // Cargar logo automáticamente
   const box = document.getElementById('logoBox');
   if (box && !box.querySelector('img')) {
-    box.innerHTML = '<img src="/logo.jpg" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" onerror="this.style.display='none'" />';
+    box.innerHTML = '<img src="/logo.jpg" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:8px;" />';
   }
 }
 
