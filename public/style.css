@@ -738,3 +738,8 @@ input:focus, textarea:focus, select:focus {
   object-fit: contain;
   border-radius: 8px;
 }
+
+/* ── OCULTAR COMPANY HEADER (logo gigante) ── */
+.company-header {
+  display: none !important;
+}
