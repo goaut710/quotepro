@@ -116,18 +116,6 @@ async function initDB() {
     )
   `);
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS products (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id     INTEGER NOT NULL,
-      name        TEXT NOT NULL,
-      description TEXT DEFAULT '',
-      price       REAL NOT NULL,
-      unit        TEXT DEFAULT 'unidad',
-      created_at  TEXT DEFAULT (datetime('now'))
-    )
-  `);
-
   saveDb();
 
   // Seed admin user
@@ -247,35 +235,6 @@ app.put('/api/quotes/:id', requireAuth, (req, res) => {
 
 app.delete('/api/quotes/:id', requireAuth, (req, res) => {
   runSql('DELETE FROM quotes WHERE id=? AND user_id=?', [req.params.id, req.session.userId]);
-  res.json({ ok: true });
-});
-
-// ─── CATÁLOGO DE PRODUCTOS ────────────────────────────────────
-
-app.get('/api/products', requireAuth, (req, res) => {
-  const rows = querySql('SELECT * FROM products WHERE user_id=? ORDER BY name ASC', [req.session.userId]);
-  res.json(rows);
-});
-
-app.post('/api/products', requireAuth, (req, res) => {
-  const { name, description, price, unit } = req.body;
-  if (!name || !price) return res.status(400).json({ error: 'Nombre y precio requeridos' });
-  db.run('INSERT INTO products (user_id, name, description, price, unit) VALUES (?,?,?,?,?)',
-    [req.session.userId, name, description||'', price, unit||'unidad']);
-  saveDb();
-  const id = getLastId();
-  res.json(queryOne('SELECT * FROM products WHERE id=?', [id]));
-});
-
-app.put('/api/products/:id', requireAuth, (req, res) => {
-  const { name, description, price, unit } = req.body;
-  runSql('UPDATE products SET name=?,description=?,price=?,unit=? WHERE id=? AND user_id=?',
-    [name, description||'', price, unit||'unidad', req.params.id, req.session.userId]);
-  res.json({ ok: true });
-});
-
-app.delete('/api/products/:id', requireAuth, (req, res) => {
-  runSql('DELETE FROM products WHERE id=? AND user_id=?', [req.params.id, req.session.userId]);
   res.json({ ok: true });
 });
 
