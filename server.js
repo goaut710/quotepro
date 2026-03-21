@@ -183,10 +183,10 @@ app.get('/api/quotes', requireAuth, async (req, res) => {
 app.get('/api/quotes/next-num', requireAuth, async (req, res) => {
   try {
     const row = await queryOne(
-      'SELECT COUNT(*) as cnt FROM quotes WHERE user_id=$1',
+      'SELECT CAST(COUNT(*) AS INTEGER) as cnt FROM quotes WHERE user_id=$1',
       [req.session.userId]
     );
-    const n   = (parseInt(row.cnt) || 0) + 1;
+    const n   = (row.cnt || 0) + 1;
     const num = `COT-${String(n).padStart(4, '0')}`;
     res.json({ quote_num: num });
   } catch(e) { res.status(500).json({ error: e.message }); }
