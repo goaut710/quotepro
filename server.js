@@ -121,7 +121,16 @@ app.post('/api/register', async (req, res) => {
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
-// ─── PROFILE ──────────────────────────────────────────────────
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const user = await queryOne(
+      'SELECT id, username, company, address, phone, email, tax_rate FROM users WHERE id = $1',
+      [req.session.userId]
+    );
+    res.json(user);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/profile', requireAuth, async (req, res) => {
   try {
     const user = await queryOne(
