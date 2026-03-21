@@ -46,12 +46,26 @@ db.run(`CREATE TABLE IF NOT EXISTS products (
   created_at TEXT DEFAULT (datetime('now'))
 )`);
 
-// Usuario por defecto
+// Usuario por defecto — se crea/actualiza siempre al arrancar
 const bcrypt = require('bcryptjs');
 const hashedPwd = bcrypt.hashSync('admin123', 10);
 try {
   db.run(`INSERT OR IGNORE INTO users (username, password) VALUES ('admin', '${hashedPwd}')`);
-} catch(e) {}
+  // Si ya existe, actualizar la contraseña por si acaso
+  db.run(`UPDATE users SET password='${hashedPwd}' WHERE username='admin'`);
+  console.log('✅ Usuario admin listo');
+} catch(e) { console.log('Usuario admin:', e.message); }
+
+// Ruta para resetear usuario (emergencia)
+app.get('/api/reset-admin', (req, res) => {
+  try {
+    db.run(`DELETE FROM users WHERE username='admin'`);
+    db.run(`INSERT INTO users (username, password) VALUES ('admin', '${hashedPwd}')`);
+    res.json({ success: true, message: 'Admin reseteado. Usuario: admin, Contraseña: admin123' });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
 
 // ── AUTH ───────────────────────────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
