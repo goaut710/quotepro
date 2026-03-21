@@ -154,7 +154,11 @@
         <div class="card company-card">
           <div class="card-label">EMISOR</div>
           <div class="company-header">
-            <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="loadLogo(event)" />
+            <div class="company-logo-box" id="logoBox" onclick="triggerLogoUpload()">
+              <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Logo</span>
+              <input type="file" id="logoInput" accept="image/*" style="display:none" onchange="loadLogo(event)" />
+            </div>
             <div class="company-fields">
               <input class="field-transparent large" type="text" id="companyName" placeholder="Nombre de Empresa" />
               <input class="field-transparent" type="text" id="companyAddress" placeholder="Dirección" />
@@ -214,10 +218,16 @@
             </tbody>
           </table>
         </div>
-        <button class="btn-add-row" onclick="addRow()">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-          Agregar ítem
-        </button>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn-add-row" onclick="addRow()">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Agregar ítem
+          </button>
+          <button class="btn-add-row" onclick="openProductsModal()" style="color:var(--text2);border-left:1px solid var(--border);padding-left:12px">
+            <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            Mis productos
+          </button>
+        </div>
       </div>
 
       <!-- TOTALS + NOTES -->

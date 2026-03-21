@@ -595,3 +595,99 @@ document.addEventListener('keydown', e => {
     doLogin();
   }
 });
+
+// ─── PRODUCTOS GUARDADOS ──────────────────────────────────────
+function getSavedProducts() {
+  try { return JSON.parse(localStorage.getItem('qp_products') || '[]'); } catch { return []; }
+}
+function saveProducts(list) {
+  localStorage.setItem('qp_products', JSON.stringify(list));
+}
+
+function openProductsModal() {
+  if (document.getElementById('productsModal')) return;
+  const products = getSavedProducts();
+  const modal = document.createElement('div');
+  modal.id = 'productsModal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)';
+  modal.innerHTML = `
+    <div style="background:#0f0f11;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:100%;max-width:560px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.6)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-size:16px;font-weight:700;color:#f2f2f4">Productos Guardados</span>
+        <button onclick="document.getElementById('productsModal').remove()" style="background:none;border:none;color:#8c8c9e;cursor:pointer;font-size:18px;padding:4px 8px">✕</button>
+      </div>
+
+      <!-- Agregar nuevo producto -->
+      <div style="background:#161619;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:1.5px;color:#4a4a5a;margin-bottom:10px;text-transform:uppercase">Guardar producto nuevo</div>
+        <input id="newProdDesc" class="field-dark" placeholder="Descripción del producto/servicio" style="margin-bottom:8px"/>
+        <div style="display:flex;gap:8px">
+          <input id="newProdPrice" class="field-dark" type="number" placeholder="Precio unitario" min="0" step="0.01" style="flex:1"/>
+          <button onclick="saveNewProduct()" style="background:#e63329;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">+ Guardar</button>
+        </div>
+      </div>
+
+      <!-- Lista de productos guardados -->
+      <div style="overflow-y:auto;flex:1" id="productsList">
+        ${products.length === 0
+          ? `<div style="text-align:center;padding:32px;color:#4a4a5a;font-size:13px">No hay productos guardados aún</div>`
+          : products.map((p, i) => `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid rgba(255,255,255,0.05);hover:background:#161619">
+              <div style="flex:1;overflow:hidden">
+                <div style="font-size:13px;font-weight:600;color:#f2f2f4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.desc)}</div>
+                <div style="font-size:11px;color:#8c8c9e;font-family:monospace;margin-top:2px">Q ${Number(p.price).toFixed(2)}</div>
+              </div>
+              <button onclick="useProduct(${i})" style="background:rgba(230,51,41,0.15);color:#ff4a3f;border:1px solid rgba(230,51,41,0.2);border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">Agregar</button>
+              <button onclick="deleteProduct(${i})" style="background:none;border:1px solid rgba(255,255,255,0.08);color:#4a4a5a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit">✕</button>
+            </div>`).join('')
+        }
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  // Close on backdrop click
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function saveNewProduct() {
+  const desc  = document.getElementById('newProdDesc')?.value.trim();
+  const price = parseFloat(document.getElementById('newProdPrice')?.value) || 0;
+  if (!desc) { toast('Escribe una descripción', 'error'); return; }
+  const products = getSavedProducts();
+  // Avoid duplicates
+  if (products.find(p => p.desc.toLowerCase() === desc.toLowerCase())) {
+    toast('Ese producto ya está guardado', 'error'); return;
+  }
+  products.push({ desc, price });
+  saveProducts(products);
+  toast(`"${desc}" guardado ✓`, 'success');
+  document.getElementById('productsModal').remove();
+  openProductsModal();
+}
+
+function useProduct(index) {
+  const products = getSavedProducts();
+  const p = products[index];
+  if (!p) return;
+  addRow(p.desc, 1, p.price, 0);
+  document.getElementById('productsModal').remove();
+  toast(`"${p.desc}" agregado ✓`, 'success');
+}
+
+function deleteProduct(index) {
+  if (!confirm('¿Eliminar este producto guardado?')) return;
+  const products = getSavedProducts();
+  products.splice(index, 1);
+  saveProducts(products);
+  document.getElementById('productsModal').remove();
+  openProductsModal();
+}
+
+// Auto-save current row product when description is filled
+function saveCurrentRowProduct(desc, price) {
+  if (!desc || !price) return;
+  const products = getSavedProducts();
+  if (!products.find(p => p.desc.toLowerCase() === desc.toLowerCase())) {
+    products.push({ desc, price });
+    saveProducts(products);
+  }
+}

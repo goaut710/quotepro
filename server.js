@@ -282,13 +282,13 @@ body{font-family:Arial,sans-serif;color:#111;background:#f0f0f0;padding:16px;fon
 .to-name{font-size:15px;font-weight:700;color:#111}
 .to-info{font-size:12px;color:#666;margin-top:3px}
 .greeting{font-size:12px;color:#555;margin-bottom:14px;font-style:italic;padding:0 2px}
-table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px}
+table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;border:1.5px solid #333}
 thead tr{background:#111;color:#fff}
-th{padding:10px 12px;text-align:left;font-weight:600;font-size:11px;letter-spacing:0.5px}
+th{padding:10px 12px;text-align:left;font-weight:600;font-size:11px;letter-spacing:0.5px;border:1px solid #444}
 th:not(:first-child){text-align:right}
-td{padding:9px 12px;border-bottom:1px solid #f0f0f0;color:#333}
+td{padding:9px 12px;border:1px solid #ccc;color:#333}
 td:not(:first-child){text-align:right}
-tr:nth-child(even) td{background:#fafafa}
+tr:nth-child(even) td{background:#f9f9f9}
 .totals{display:flex;justify-content:flex-end;margin-bottom:16px}
 .tbox{width:240px}
 .tr{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;font-size:13px;color:#666}
