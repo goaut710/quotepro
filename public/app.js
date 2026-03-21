@@ -20,7 +20,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function checkSession() {
   try {
-    const res = await fetch(`${API}/api/me`, { credentials: 'include' });
+    const token = localStorage.getItem('qp_token');
+    if (!token) return;
+    const res = await fetch(`${API}/api/me`, { 
+      credentials: 'include',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
     if (res.ok) {
       currentUser = await res.json();
       bootApp();
@@ -61,7 +66,8 @@ async function doLogin() {
     });
     const data = await res.json();
     if (!res.ok) return showError(err, data.error || 'Error al iniciar sesión');
-    currentUser = await (await fetch(`${API}/api/me`, { credentials: 'include' })).json();
+    if (data.token) localStorage.setItem('qp_token', data.token);
+    currentUser = data.user || data;
     bootApp();
   } catch (e) { showError(err, 'Error de conexión'); }
 }

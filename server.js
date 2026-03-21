@@ -4,6 +4,8 @@
 // ============================================================
 
 const express     = require('express');
+const crypto      = require('crypto');
+const tokens      = {}; // token -> userId en memoria
 const session     = require('express-session');
 const bcrypt      = require('bcryptjs');
 const path        = require('path');
@@ -35,6 +37,13 @@ app.use(session({
 // ─── Auth Middleware ──────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session && req.session.userId) return next();
+  // Aceptar token Bearer
+  const auth = req.headers['authorization'] || '';
+  const token = auth.replace('Bearer ', '').trim();
+  if (token && tokens[token]) {
+    req.session.userId = tokens[token];
+    return next();
+  }
   res.status(401).json({ error: 'No autorizado' });
 }
 
@@ -143,7 +152,10 @@ app.post('/api/login', (req, res) => {
   }
   req.session.userId   = user.id;
   req.session.username = user.username;
-  res.json({ ok: true, username: user.username });
+  // Token para clientes que no soportan cookies
+  const token = crypto.randomBytes(32).toString('hex');
+  tokens[token] = user.id;
+  res.json({ ok: true, username: user.username, token, user: { id: user.id, username: user.username, company: user.company, address: user.address, phone: user.phone, email: user.email, tax_rate: user.tax_rate } });
 });
 
 app.post('/api/logout', (req, res) => {
