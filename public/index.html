@@ -91,10 +91,6 @@
         <svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         Historial
       </a>
-      <a class="nav-item" onclick="showPage('catalog')" data-page="catalog">
-        <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM16 3H8L6 7h12l-2-4z"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
-        Catálogo
-      </a>
       <a class="nav-item" onclick="showPage('settings')" data-page="settings">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         Configuración
@@ -222,10 +218,16 @@
             </tbody>
           </table>
         </div>
-        <button class="btn-add-row" onclick="addRow()">
-          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-          Agregar ítem
-        </button>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <button class="btn-add-row" onclick="addRow()">
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Agregar ítem
+          </button>
+          <button class="btn-add-row" onclick="openProductsModal()" style="color:var(--text2);border-left:1px solid var(--border);padding-left:12px">
+            <svg viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z"/><path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"/></svg>
+            Mis productos
+          </button>
+        </div>
       </div>
 
       <!-- TOTALS + NOTES -->
@@ -236,14 +238,6 @@
         </div>
 
         <div class="card totals-card">
-          <div class="totals-row">
-            <span>Subtotal</span>
-            <span id="subtotalDisplay">Q 0.00</span>
-          </div>
-          <div class="totals-row tax-row">
-            <span>IVA (<span id="taxRateDisplay">12</span>%)</span>
-            <span id="taxDisplay">Q 0.00</span>
-          </div>
           <div class="totals-row total-row">
             <span>TOTAL</span>
             <span id="totalDisplay">Q 0.00</span>
@@ -304,55 +298,6 @@
         <button class="btn-primary" onclick="saveSettings()">Guardar cambios</button>
       </div>
     </section>
-
-
-    <!-- ══════════════════════════════════════════
-         CATÁLOGO DE PRODUCTOS
-    ══════════════════════════════════════════ -->
-    <div id="page-catalog" class="page">
-      <div class="page-header">
-        <h1 class="page-title">Catálogo de Productos</h1>
-        <p class="page-sub">Guarda tus productos para usarlos rápidamente en cotizaciones</p>
-      </div>
-
-      <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
-        <!-- Formulario -->
-        <div class="card">
-          <div class="card-label" id="catalog-form-label">AGREGAR PRODUCTO</div>
-          <div class="field-group" style="margin-bottom:10px">
-            <label>Nombre *</label>
-            <input class="field-dark" type="text" id="prod-name" placeholder="Ej: Cinta para juntas"/>
-          </div>
-          <div class="field-group" style="margin-bottom:10px">
-            <label>Descripción</label>
-            <input class="field-dark" type="text" id="prod-desc" placeholder="Descripción opcional"/>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-            <div class="field-group">
-              <label>Precio *</label>
-              <input class="field-dark" type="number" id="prod-price" min="0" step="0.01" placeholder="0.00"/>
-            </div>
-            <div class="field-group">
-              <label>Unidad</label>
-              <input class="field-dark" type="text" id="prod-unit" placeholder="unidad, m², kg..." value="unidad"/>
-            </div>
-          </div>
-          <input type="hidden" id="prod-edit-id"/>
-          <button class="btn-primary" id="prod-save-btn" onclick="saveProduct()" style="width:100%">+ Guardar Producto</button>
-          <button id="prod-cancel-btn" onclick="cancelEditProduct()" style="display:none;width:100%;margin-top:8px;background:transparent;border:1px solid #555;color:#aaa;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit">Cancelar</button>
-        </div>
-
-        <!-- Lista -->
-        <div class="card" style="padding:0;overflow:hidden">
-          <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.07)">
-            <input class="field-dark" type="text" id="catalog-search" placeholder="🔍 Buscar producto..." oninput="filterCatalog(this.value)" style="width:100%"/>
-          </div>
-          <div id="catalog-list" style="max-height:520px;overflow-y:auto">
-            <div style="text-align:center;padding:40px;color:#555">Cargando...</div>
-          </div>
-        </div>
-      </div>
-    </div>
 
   </main>
 </div>
